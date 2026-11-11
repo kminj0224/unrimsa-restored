@@ -129,6 +129,11 @@ export function buildWorld(scene,maps){
  const bronze=new T.MeshStandardMaterial({color:'#957d51',map:maps.clay,bumpMap:maps.clay,bumpScale:.073,metalness:.63,roughness:.48});
  const brass=new T.MeshStandardMaterial({color:'#c3a56b',metalness:.65,roughness:.43});
  const fabric=new T.MeshStandardMaterial({color:'#777253',map:maps.paper,bumpMap:maps.paper,bumpScale:.023,roughness:.97});
+ const hemp=new T.MeshStandardMaterial({color:'#b5a17b',map:maps.paper,bumpMap:maps.paper,bumpScale:.029,roughness:1});
+ const bedding=new T.MeshStandardMaterial({color:'#63777a',map:maps.paper,bumpMap:maps.paper,bumpScale:.024,roughness:1});
+ const ceramic=new T.MeshStandardMaterial({color:'#798475',map:maps.clay,roughness:.54});
+ const clay=new T.MeshStandardMaterial({color:'#745344',map:maps.clay,bumpMap:maps.clay,bumpScale:.032,roughness:.82});
+ const waterGlaze=new T.MeshStandardMaterial({color:'#687a76',metalness:.15,roughness:.14});
  const shadowMesh=(g,m)=>{
    const o=new T.Mesh(g,m);o.castShadow=true;o.receiveShadow=true;return o;
  };
@@ -392,6 +397,61 @@ export function buildWorld(scene,maps){
        box(xx,y,zz,.62,1.07,.54,wood);solid(xx,zz,.62,.54);
        for(let j=1;j<4;j++)box(xx,y+j*.26,zz+.28,.58,.04,.033,dark);
      }
+     // The west hall is the monks' living quarters. Leave the centre aisle open.
+     const matX=x-1.88,matZ=z+.52;
+     box(matX,y+.012,matZ,1.22,.022,2.09,hemp);
+     for(const edge of [-1,1]){
+       box(matX+edge*.594,y+.034,matZ,.027,.012,2.09,dark);
+       box(matX,y+.034,matZ+edge*1.029,1.20,.012,.029,dark);
+     }
+     for(let i=0;i<23;i++)box(matX,y+.033,matZ-.97+i*.087,1.13,.004,.010,tan);
+     box(matX,y+.038,matZ-.19,1.04,.075,1.40,bedding);
+     box(matX,y+.112,matZ-.71,.63,.123,.33,hemp);
+     box(matX,y+.103,matZ+.31,1.05,.055,.60,fabric);
+     for(const offset of [.08,.19,.29])box(matX,y+.157,matZ+offset,1.04,.007,.015,hemp);
+     use('bedding','자리 살펴보기',matX,y+.23,matZ,1.62,id);
+
+     const chestX=x+.92,chestZ=z-2.31;
+     box(chestX,y,chestZ,2.14,.83,.68,dark);
+     box(chestX,y+.82,chestZ,2.22,.093,.74,wood);
+     for(const side of [-1,1]){
+       const panelX=chestX+side*.55;
+       box(panelX,y+.18,chestZ+.35,1.04,.59,.061,wood);
+       box(panelX,y+.25,chestZ+.386,.83,.44,.028,tan);
+       box(panelX,y+.43,chestZ+.407,.096,.13,.026,brass);
+       const handle=new T.TorusGeometry(.033,.006,6,14).translate(panelX,y+.42,chestZ+.43);
+       add(handle,brass);
+     }
+     solid(chestX,chestZ,2.22,.74);
+     for(let i=0;i<3;i++){
+       box(chestX+.62,y+.925+i*.067,chestZ,.67-i*.045,.062,.49,i%2===0?fabric:bedding,.035*i);
+     }
+     round(chestX-.66,y+.92,chestZ,[[.10,0],[.135,.035],[.137,.16],[.10,.23],[.08,.25],[.08,.275]],clay);
+
+     const teaX=x+1.84,teaZ=z+.39,teaY=y+.40;
+     box(teaX,y+.29,teaZ,1.08,.095,.69,wood);
+     for(const dx of [-.40,.40])for(const dz of [-.24,.24])box(teaX+dx,y,teaZ+dz,.082,.30,.082,dark);
+     box(teaX,teaY-.014,teaZ,.87,.023,.51,dark);
+     round(teaX-.14,teaY,teaZ-.038,[[.066,0],[.102,.025],[.128,.087],[.120,.147],[.089,.186],[.060,.197]],ceramic);
+     round(teaX-.14,teaY+.193,teaZ-.038,[[.080,0],[.078,.019],[.030,.030],[.025,.056],[.012,.061]],ceramic);
+     pipe([teaX-.24,teaY+.082,teaZ-.038],[teaX-.365,teaY+.17,teaZ-.038],.033,.020,ceramic);
+     sweep([[teaX-.044,teaY+.08,teaZ-.04],[teaX+.046,teaY+.105,teaZ-.04],[teaX+.030,teaY+.174,teaZ-.04],[teaX-.067,teaY+.166,teaZ-.04]],.015,ceramic);
+     for(const dz of [-.12,.11])round(teaX+.228,teaY,teaZ+dz,[[.034,0],[.059,.012],[.076,.070],[.071,.074],[.064,.067],[.042,.025]],ceramic);
+     solid(teaX,teaZ,1.08,.69);
+     use('tea','다구 살펴보기',teaX,teaY+.17,teaZ,1.50,id);
+     for(const side of [-1,1])box(teaX,y+.014,teaZ+side*.70,.60,.054,.51,fabric,side*.04);
+
+     const shelfX=x-2.65,shelfZ=z-1.27;
+     for(const dz of [-.34,.34])box(shelfX,y,shelfZ+dz,.30,1.56,.073,dark);
+     for(const level of [.24,.68,1.14])box(shelfX,y+level,shelfZ,.35,.05,.75,wood);
+     for(const [dz,h,r] of [[-.23,.19,.095],[.03,.24,.119],[.23,.17,.079]]){
+       round(shelfX,y+.73,shelfZ+dz,[[r*.60,0],[r,.05],[r,h*.57],[r*.73,h*.85],[r*.63,h],[r*.49,h]],clay);
+     }
+     box(shelfX,y+1.20,shelfZ,.25,.092,.44,hemp);
+     solid(shelfX,shelfZ,.35,.75);
+     const light=new T.PointLight('#ffd1a1',2.8,4.0,2);
+     light.position.set(x+.66,y+2.23,z+.54);
+     scene.add(light);
    }else{
      const sz=z-.81;
      box(x,y,sz,1.04,.34,.70,dark);box(x,y+.34,sz,1.13,.082,.76,wood);
@@ -403,6 +463,34 @@ export function buildWorld(scene,maps){
      for(const sign of [-1,1])box(x+sign*1.19,y+.013,z+.54,.73,.058,.64,fabric);
    }
  }
+
+ section='living-yard';
+ const pegX=-20.11,pegZ=-5.03;
+ column(pegX,1.11,pegZ,.09,.57,wood);
+ round(pegX,1.48,pegZ,[[.091,0],[.106,.026],[.106,.088],[.091,.112]],bronze,undefined,14);
+ solid(pegX,pegZ,.19,.19);
+ const kennelX=-19.96,kennelZ=-6.30;
+ box(kennelX,1.11,kennelZ,1.45,.12,1.28,dark);
+ for(const side of [-1,1])box(kennelX+side*.64,1.23,kennelZ,.15,.77,1.27,wood);
+ box(kennelX,1.23,kennelZ-.60,1.44,.79,.14,wood);
+ for(const side of [-1,1])box(kennelX+side*.51,1.23,kennelZ+.57,.36,.76,.12,wood);
+ box(kennelX,1.84,kennelZ+.57,1.39,.21,.12,dark);
+ for(const side of [-1,1]){
+   const plank=new T.BoxGeometry(.99,.11,1.56).rotateZ(-side*.31).translate(kennelX+side*.46,2.14,kennelZ);
+   add(plank,ridge);
+ }
+ pipe([kennelX,2.33,kennelZ-.79],[kennelX,2.33,kennelZ+.79],.057,.057,dark);
+ box(kennelX,1.23,kennelZ+.10,1.10,.028,.90,hemp);
+ solid(kennelX,kennelZ,1.45,1.28);
+ const bowlX=-18.49,bowlZ=-5.55;
+ round(bowlX,1.11,bowlZ,[[.115,0],[.137,.022],[.173,.102],[.169,.119],[.154,.117],[.137,.054],[.044,.035]],clay);
+ round(bowlX,1.198,bowlZ,[[0,0],[.149,0]],waterGlaze);
+ for(const [xx,zz,r] of [[-21.50,-4.85,.27],[-21.51,-5.49,.31],[-22.09,-5.25,.20]]){
+   round(xx,1.11,zz,[[r*.62,0],[r*.89,.09],[r,.32],[r*.84,.50],[r*.66,.57]],clay);
+   round(xx,1.68,zz,[[r*.69,0],[r*.70,.027],[r*.46,.056],[r*.13,.079]],dark);
+   solid(xx,zz,r*2,r*2);
+ }
+ for(const dz of [-.44,0,.44])box(-21.51,1.105,-5.20+dz,1.87,.048,.43,stone);
 
  section='gate';
  for(const x of [-7.55,-.45]){

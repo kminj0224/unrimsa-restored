@@ -4,6 +4,7 @@ import {RoomEnvironment} from './vendor/RoomEnvironment.js';
 import {buildWorld,clamp,pond,random,river,sanctuary} from './world.js';
 import {addWater,plantForest} from './nature.js';
 import {walking} from './walk.js';
+import {addAnimals} from './animals.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('map');
@@ -12,7 +13,7 @@ const keys=new Set();
 const audio=Object.fromEntries(['bell','moktak','door','water'].map(n=>[n,new Audio('/'+n+'.ogg')]));
 for(const [key,vol] of Object.entries({bell:.81,moktak:.64,door:.41,water:.12}))audio[key].volume=vol;
 audio.water.loop=true;
-let world,walk,renderer,scene,camera,water,smoke;
+let world,walk,renderer,scene,camera,water,smoke,animals;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
 let dragMove=null,dragLook=null,moveOrigin=[0,0],lookOrigin=[0,0],stick=[0,0];
 let active=null,lastActionText='',lastSite='',feedbackUntil=0,bellAt=-Infinity,incenseAt=-Infinity;
@@ -64,6 +65,10 @@ function use(){
    report('향을 피웠습니다.');
  }else if(a.id==='read'){
    neutral();$('book').hidden=false;
+ }else if(a.id==='bedding'){
+   report('돗자리 위에 요와 접은 이불이 놓여 있습니다.');
+ }else if(a.id==='tea'){
+   report('낮은 상에 찻주전자와 잔 두 개가 놓여 있습니다.');
  }
 }
 function labelSite(player,room){
@@ -71,6 +76,7 @@ function labelSite(player,room){
  const {x,z}=player;
  if(z>20.0)return '사찰로 오르는 산길';
  if(z>14.9&&Math.abs(x+4)<6.4)return '일주문';
+ if(x<-17.3&&x>-23&&z>-7.8&&z<-1.5)return '요사채 뒷마당';
  if(Math.hypot(x-pond.x,(z-pond.z)*1.14)<5.43)return '연꽃 연못';
  if(Math.abs(x-10.5)<3.7&&Math.abs(z-5)<3.8)return '범종각';
  if(Math.abs(x+4)<4.9&&Math.abs(z+2.4)<5.6)return '삼층석탑 마당';
@@ -197,6 +203,7 @@ function update(now){
  }
  const t=now*.001;
  for(const surface of water.waters)surface.material.uniforms.time.value=t;
+ animals.tick(dt);
  camera.position.set(p.x,p.y+1.66,p.z);
  rotation.set(p.pitch,-p.yaw,0,'YXZ');camera.quaternion.setFromEuler(rotation);
  renderer.render(scene,camera);
@@ -375,6 +382,7 @@ async function boot(){
  water=addWater(scene,maps,direction);
  smoke=createSmoke();
  walk=walking(world);
+ animals=addAnimals(scene,walk.floorAt);
  try{$('guide').hidden=localStorage.getItem('unrimsa-seen')==='1';}catch{$('guide').hidden=false;}
  $('loading').hidden=true;
  started=running=true;
