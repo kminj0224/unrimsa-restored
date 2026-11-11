@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob:; object-src 'none'; base-uri 'none'">
+<title>운림사 · 산사 탐방</title>
+<style>
+:root{font-family:system-ui,sans-serif;background:#283930;color:#fff1d5}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+body{user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button{color:inherit;font:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid #f4ce94;outline-offset:3px}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#head{position:absolute;left:max(14px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));display:flex;align-items:center;gap:9px;background:#22372edf;border:1px solid #f7e6c65a;border-radius:7px;padding:8px 12px;pointer-events:none;box-shadow:0 3px 14px #11231d42}
+.seal{color:#e3ae83;font:20px Georgia,serif;border:1px solid #e3ae837a;border-radius:3px;padding:1px 4px}
+#head strong{font-family:serif;letter-spacing:.13em}#place{font-size:11px;color:#e9d9ba}
+#menu{position:absolute;right:max(14px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));display:flex;gap:7px}
+.chip,#action,#jump{border:1px solid #f1dcab76;border-radius:7px;background:#253a30e8;min-height:43px;padding:0 12px;font-size:13px;box-shadow:0 4px 13px #15241bb0}
+#action{position:absolute;right:max(21px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));background:#684b30ee;border-color:#ffe1a9;font-weight:700;min-height:51px;touch-action:none}
+#jump{position:absolute;right:max(21px,env(safe-area-inset-right));bottom:calc(max(22px,env(safe-area-inset-bottom)) + 61px);min-height:48px;min-width:67px;background:#283b32e8;border-color:#eddbb3a0;touch-action:none;font-weight:700}
+#jump[data-airborne="true"]{opacity:.60}
+#aim{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border:1px solid #ffedcb;box-shadow:0 0 0 1px #26372bbc;border-radius:50%;pointer-events:none}
+#aim.ready{width:9px;height:9px;background:#ffdc9c}
+#status{position:absolute;left:50%;top:13%;transform:translateX(-50%);border:1px solid #e7d6b258;border-radius:5px;padding:7px 10px;background:#21372ce8;font-size:13px;max-width:52%;text-align:center;pointer-events:none}
+#stick{position:absolute;left:max(22px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));display:grid;place-items:center;width:84px;height:84px;background:#24372c74;border:1px solid #f6e6bd96;border-radius:50%;pointer-events:none}
+#stick b{width:30px;height:30px;border:1px solid #fff2d9a0;background:#eddbb499;border-radius:50%}
+#stick span{position:absolute;bottom:-16px;font-size:10px;text-shadow:0 1px 3px #18271f}
+.cover{position:absolute;inset:0;background:#172820b8;display:grid;place-items:center;padding:13px}
+.card{background:#24392f;border:1px solid #f5e0b478;border-radius:9px;padding:15px 18px;width:min(440px,92vw);max-height:92vh;overflow:auto;box-shadow:0 12px 35px #18241aaf}
+.card h1,.card h2{font:700 25px/1.2 serif;margin:0 0 8px}
+.card p,.card ul{font-size:13px;line-height:1.48;margin:6px 0 10px}.card ul{padding-left:19px}
+.row{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.primary,.secondary{background:#e5c08c;color:#263a2d;border:1px solid #e9c99b;border-radius:5px;padding:7px 11px;min-height:38px;font-size:13px;font-weight:700}
+.secondary{background:transparent;color:#f1dfbd;border-color:#f1dfbd74}
+#loading .card{width:auto;min-width:230px;text-align:center}
+#credits{font-size:10px;color:#dccba6}
+</style>
+<script type="module" src="/game.js"></script>
+</head>
+<body>
+<canvas id="map" aria-label="운림사 1인칭 산책"></canvas>
+<div id="head"><span class="seal" aria-hidden="true">雲</span><div><strong>운림사</strong><div id="place">사찰로 오르는 산길</div></div></div>
+<div id="menu"><button id="sound" class="chip" type="button" aria-pressed="false">소리 켬</button><button id="help" class="chip" type="button">조작법</button></div>
+<div id="aim"></div><div id="status" role="status" hidden></div>
+<div id="stick"><b id="knob"></b><span>이동</span></div>
+<button id="jump" type="button" aria-label="점프" hidden>↑ 점프</button>
+<button id="action" type="button" hidden></button>
+<section id="guide" class="cover" hidden><div class="card"><h2>운림사 둘러보기</h2><ul><li>왼쪽 화면을 누르고 밀어 걷습니다.</li><li>오른쪽 화면을 끌어 시선을 움직입니다.</li><li>오른쪽의 점프 버튼을 누르면서 앞으로 밀면 낮은 턱을 넘을 수 있습니다.</li><li>문이나 물건을 가까이 보면 행동 버튼이 나타납니다.</li></ul><p id="credits">불상 스캔 · Minneapolis Institute of Art (금박 색으로 재가공)<br>소나무 질감 · Poly Haven / 단풍나무 · Innerscene (CC0)</p><div class="row"><button id="reset" class="secondary" type="button">산길로 돌아가기</button><button id="resume" class="primary" type="button">걷기 시작</button></div></div></section>
+<section id="book" class="cover" hidden><div class="card"><h2>요사채의 필사본</h2><p>산문을 나서면 옷깃에 솔 향이 들고,<br>돌다리 건너 물결에는 저녁빛이 머문다.<br>한 번 울린 종은 골짜기마다 여운을 남긴다.</p><div class="row"><button id="bookClose" class="primary" type="button">필사본 덮기</button></div></div></section>
+<div id="loading" class="cover" role="status"><div class="card"><h1>운림사</h1><p id="loadText">산사를 불러오는 중</p></div></div>
+</body>
+</html>

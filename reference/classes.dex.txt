@@ -1,0 +1,264 @@
+Lcom/unrimsa/explore/TempleActivity$LocalAssets; 0x10 Landroid/webkit/WebViewClient; TempleActivity.java
+  Lcom/unrimsa/explore/TempleActivity$LocalAssets;->this$0:Lcom/unrimsa/explore/TempleActivity; 0x1010
+Lcom/unrimsa/explore/TempleActivity$LocalAssets;-><init>(Lcom/unrimsa/explore/TempleActivity;)V 0x10002
+  registers 2 ins 2 outs 1
+  0000: iput-object v1, v0, Lcom/unrimsa/explore/TempleActivity$LocalAssets;->this$0:Lcom/unrimsa/explore/TempleActivity;
+  0002: invoke-direct {v0}, Landroid/webkit/WebViewClient;-><init>()V
+  0005: return-void 
+Lcom/unrimsa/explore/TempleActivity$LocalAssets;-><init>(Lcom/unrimsa/explore/TempleActivity;Lcom/unrimsa/explore/TempleActivity$LocalAssets;)V 0x11000
+  registers 3 ins 3 outs 2
+  0000: invoke-direct {v0, v1}, Lcom/unrimsa/explore/TempleActivity$LocalAssets;-><init>(Lcom/unrimsa/explore/TempleActivity;)V
+  0003: return-void 
+Lcom/unrimsa/explore/TempleActivity$LocalAssets;->missing()Landroid/webkit/WebResourceResponse; 0x2
+  registers 9 ins 1 outs 7
+  0000: new-instance v7, Landroid/webkit/WebResourceResponse;
+  0002: invoke-static {}, Ljava/util/Collections;->emptyMap()Ljava/util/Map;
+  0005: move-result-object v5
+  0006: new-instance v6, Ljava/io/ByteArrayInputStream;
+  0008: const/4 v0, 0
+  0009: new-array v0, v0, [B
+  000b: invoke-direct {v6, v0}, Ljava/io/ByteArrayInputStream;-><init>([B)V
+  000e: const-string v1, 'text/plain'
+  0010: const-string v2, 'UTF-8'
+  0012: const/16 v3, 0x194
+  0014: const-string v4, 'Not Found'
+  0016: move-object v0, v7
+  0017: invoke-direct/range {v0, v1, v2, v3, v4, v5, v6}, Landroid/webkit/WebResourceResponse;-><init>(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/util/Map;Ljava/io/InputStream;)V
+  001a: return-object v7
+Lcom/unrimsa/explore/TempleActivity$LocalAssets;->shouldInterceptRequest(Landroid/webkit/WebView;Landroid/webkit/WebResourceRequest;)Landroid/webkit/WebResourceResponse; 0x1
+  registers 11 ins 3 outs 7
+  0000: invoke-interface {v10}, Landroid/webkit/WebResourceRequest;->getUrl()Landroid/net/Uri;
+  0003: move-result-object v9
+  0004: invoke-virtual {v9}, Landroid/net/Uri;->getPath()Ljava/lang/String;
+  0007: move-result-object v9
+  0008: invoke-interface {v10}, Landroid/webkit/WebResourceRequest;->getUrl()Landroid/net/Uri;
+  000b: move-result-object v0
+  000c: invoke-virtual {v0}, Landroid/net/Uri;->getScheme()Ljava/lang/String;
+  000f: move-result-object v0
+  0010: const-string v1, 'https'
+  0012: invoke-virtual {v1, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+  0015: move-result v0
+  0016: if-eqz v0, 00d5
+  0018: invoke-interface {v10}, Landroid/webkit/WebResourceRequest;->getUrl()Landroid/net/Uri;
+  001b: move-result-object v10
+  001c: invoke-virtual {v10}, Landroid/net/Uri;->getHost()Ljava/lang/String;
+  001f: move-result-object v10
+  0020: const-string v0, 'unrimsa.local'
+  0022: invoke-virtual {v0, v10}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+  0025: move-result v10
+  0026: if-eqz v10, 00d5
+  0028: if-eqz v9, 00d5
+  002a: const-string v10, '/[a-zA-Z0-9_./-]+'
+  002c: invoke-virtual {v9, v10}, Ljava/lang/String;->matches(Ljava/lang/String;)Z
+  002f: move-result v10
+  0030: if-eqz v10, 00d5
+  0032: const-string v10, '..'
+  0034: invoke-virtual {v9, v10}, Ljava/lang/String;->contains(Ljava/lang/CharSequence;)Z
+  0037: move-result v10
+  0038: if-nez v10, 00d5
+  003a: const-string v10, '//'
+  003c: invoke-virtual {v9, v10}, Ljava/lang/String;->contains(Ljava/lang/CharSequence;)Z
+  003f: move-result v10
+  0040: if-eqz v10, 0044
+  0042: goto/16 00d5
+  0044: const-string v10, '.html'
+  0046: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  0049: move-result v10
+  004a: const/4 v0, 0
+  004b: if-eqz v10, 0051
+  004d: const-string v10, 'text/html'
+  004f: move-object v2, v10
+  0050: goto 0094
+  0051: const-string v10, '.js'
+  0053: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  0056: move-result v10
+  0057: if-eqz v10, 005c
+  0059: const-string v10, 'application/javascript'
+  005b: goto 004f
+  005c: const-string v10, '.json'
+  005e: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  0061: move-result v10
+  0062: if-eqz v10, 0067
+  0064: const-string v10, 'application/json'
+  0066: goto 004f
+  0067: const-string v10, '.png'
+  0069: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  006c: move-result v10
+  006d: if-eqz v10, 0072
+  006f: const-string v10, 'image/png'
+  0071: goto 004f
+  0072: const-string v10, '.jpg'
+  0074: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  0077: move-result v10
+  0078: if-eqz v10, 007d
+  007a: const-string v10, 'image/jpeg'
+  007c: goto 004f
+  007d: const-string v10, '.ogg'
+  007f: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  0082: move-result v10
+  0083: if-eqz v10, 0088
+  0085: const-string v10, 'audio/ogg'
+  0087: goto 004f
+  0088: const-string v10, '.glb'
+  008a: invoke-virtual {v9, v10}, Ljava/lang/String;->endsWith(Ljava/lang/String;)Z
+  008d: move-result v10
+  008e: if-eqz v10, 0093
+  0090: const-string v10, 'model/gltf-binary'
+  0092: goto 004f
+  0093: move-object v2, v0
+  0094: if-nez v2, 009b
+  0096: invoke-direct {v8}, Lcom/unrimsa/explore/TempleActivity$LocalAssets;->missing()Landroid/webkit/WebResourceResponse;
+  0099: move-result-object v9
+  009a: return-object v9
+  009b: new-instance v10, Landroid/webkit/WebResourceResponse;
+  009d: const-string v1, 'text'
+  009f: invoke-virtual {v2, v1}, Ljava/lang/String;->startsWith(Ljava/lang/String;)Z
+  00a2: move-result v1
+  00a3: if-nez v1, 00ad
+  00a5: const-string v1, 'javascript'
+  00a7: invoke-virtual {v2, v1}, Ljava/lang/String;->contains(Ljava/lang/CharSequence;)Z
+  00aa: move-result v1
+  00ab: if-eqz v1, 00af
+  00ad: const-string v0, 'UTF-8'
+  00af: move-object v3, v0
+  00b0: const-string v5, 'OK'
+  00b2: const-string v0, 'X-Content-Type-Options'
+  00b4: const-string v1, 'nosniff'
+  00b6: invoke-static {v0, v1}, Ljava/util/Collections;->singletonMap(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;
+  00b9: move-result-object v6
+  00ba: iget-object v0, v8, Lcom/unrimsa/explore/TempleActivity$LocalAssets;->this$0:Lcom/unrimsa/explore/TempleActivity;
+  00bc: invoke-virtual {v0}, Lcom/unrimsa/explore/TempleActivity;->getAssets()Landroid/content/res/AssetManager;
+  00bf: move-result-object v0
+  00c0: const/4 v1, 1
+  00c1: invoke-virtual {v9, v1}, Ljava/lang/String;->substring(I)Ljava/lang/String;
+  00c4: move-result-object v9
+  00c5: invoke-virtual {v0, v9}, Landroid/content/res/AssetManager;->open(Ljava/lang/String;)Ljava/io/InputStream;
+  00c8: move-result-object v7
+  00c9: const/16 v4, 0xc8
+  00cb: move-object v1, v10
+  00cc: invoke-direct/range {v1, v2, v3, v4, v5, v6, v7}, Landroid/webkit/WebResourceResponse;-><init>(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/util/Map;Ljava/io/InputStream;)V
+  00cf: return-object v10
+  00d0: invoke-direct {v8}, Lcom/unrimsa/explore/TempleActivity$LocalAssets;->missing()Landroid/webkit/WebResourceResponse;
+  00d3: move-result-object v9
+  00d4: return-object v9
+  00d5: invoke-direct {v8}, Lcom/unrimsa/explore/TempleActivity$LocalAssets;->missing()Landroid/webkit/WebResourceResponse;
+  00d8: move-result-object v9
+  00d9: return-object v9
+  catch Ljava/io/IOException; 009b..00cf -> 00d0
+Lcom/unrimsa/explore/TempleActivity$LocalAssets;->shouldOverrideUrlLoading(Landroid/webkit/WebView;Landroid/webkit/WebResourceRequest;)Z 0x1
+  registers 3 ins 3 outs 0
+  0000: const/4 v1, 1
+  0001: return v1
+Lcom/unrimsa/explore/TempleActivity; 0x11 Landroid/app/Activity; TempleActivity.java
+  static values 01177f000000020000000815
+  Lcom/unrimsa/explore/TempleActivity;->HOST:Ljava/lang/String; 0x1a
+  Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView; 0x2
+Lcom/unrimsa/explore/TempleActivity;-><init>()V 0x10001
+  registers 1 ins 1 outs 1
+  0000: invoke-direct {v0}, Landroid/app/Activity;-><init>()V
+  0003: return-void 
+Lcom/unrimsa/explore/TempleActivity;->immersive()V 0x2
+  registers 3 ins 1 outs 2
+  0000: sget v0, Landroid/os/Build$VERSION;->SDK_INT:I
+  0002: const/16 v1, 0x1e
+  0004: if-lt v0, v1, 0024
+  0006: invoke-virtual {v2}, Lcom/unrimsa/explore/TempleActivity;->getWindow()Landroid/view/Window;
+  0009: move-result-object v0
+  000a: const/4 v1, 0
+  000b: invoke-virtual {v0, v1}, Landroid/view/Window;->setDecorFitsSystemWindows(Z)V
+  000e: invoke-virtual {v2}, Lcom/unrimsa/explore/TempleActivity;->getWindow()Landroid/view/Window;
+  0011: move-result-object v0
+  0012: invoke-virtual {v0}, Landroid/view/Window;->getInsetsController()Landroid/view/WindowInsetsController;
+  0015: move-result-object v0
+  0016: if-eqz v0, 0031
+  0018: invoke-static {}, Landroid/view/WindowInsets$Type;->systemBars()I
+  001b: move-result v1
+  001c: invoke-interface {v0, v1}, Landroid/view/WindowInsetsController;->hide(I)V
+  001f: const/4 v1, 2
+  0020: invoke-interface {v0, v1}, Landroid/view/WindowInsetsController;->setSystemBarsBehavior(I)V
+  0023: goto 0031
+  0024: invoke-virtual {v2}, Lcom/unrimsa/explore/TempleActivity;->getWindow()Landroid/view/Window;
+  0027: move-result-object v0
+  0028: invoke-virtual {v0}, Landroid/view/Window;->getDecorView()Landroid/view/View;
+  002b: move-result-object v0
+  002c: const/16 v1, 0x1706
+  002e: invoke-virtual {v0, v1}, Landroid/view/View;->setSystemUiVisibility(I)V
+  0031: return-void 
+Lcom/unrimsa/explore/TempleActivity;->onCreate(Landroid/os/Bundle;)V 0x1
+  registers 4 ins 2 outs 3
+  0000: invoke-super {v2, v3}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+  0003: new-instance v3, Landroid/webkit/WebView;
+  0005: invoke-direct {v3, v2}, Landroid/webkit/WebView;-><init>(Landroid/content/Context;)V
+  0008: iput-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  000a: const v0, -0xdac5cf
+  000d: invoke-virtual {v3, v0}, Landroid/webkit/WebView;->setBackgroundColor(I)V
+  0010: iget-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0012: const/4 v0, 2
+  0013: invoke-virtual {v3, v0}, Landroid/webkit/WebView;->setOverScrollMode(I)V
+  0016: iget-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0018: invoke-virtual {v3}, Landroid/webkit/WebView;->getSettings()Landroid/webkit/WebSettings;
+  001b: move-result-object v3
+  001c: const/4 v0, 1
+  001d: invoke-virtual {v3, v0}, Landroid/webkit/WebSettings;->setJavaScriptEnabled(Z)V
+  0020: invoke-virtual {v3, v0}, Landroid/webkit/WebSettings;->setDomStorageEnabled(Z)V
+  0023: const/4 v1, 0
+  0024: invoke-virtual {v3, v1}, Landroid/webkit/WebSettings;->setAllowFileAccess(Z)V
+  0027: invoke-virtual {v3, v1}, Landroid/webkit/WebSettings;->setAllowContentAccess(Z)V
+  002a: invoke-virtual {v3, v0}, Landroid/webkit/WebSettings;->setMediaPlaybackRequiresUserGesture(Z)V
+  002d: iget-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  002f: new-instance v0, Lcom/unrimsa/explore/TempleActivity$LocalAssets;
+  0031: const/4 v1, 0
+  0032: invoke-direct {v0, v2, v1}, Lcom/unrimsa/explore/TempleActivity$LocalAssets;-><init>(Lcom/unrimsa/explore/TempleActivity;Lcom/unrimsa/explore/TempleActivity$LocalAssets;)V
+  0035: invoke-virtual {v3, v0}, Landroid/webkit/WebView;->setWebViewClient(Landroid/webkit/WebViewClient;)V
+  0038: iget-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  003a: invoke-virtual {v2, v3}, Lcom/unrimsa/explore/TempleActivity;->setContentView(Landroid/view/View;)V
+  003d: invoke-direct {v2}, Lcom/unrimsa/explore/TempleActivity;->immersive()V
+  0040: iget-object v3, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0042: const-string v0, 'https://unrimsa.local/index.html'
+  0044: invoke-virtual {v3, v0}, Landroid/webkit/WebView;->loadUrl(Ljava/lang/String;)V
+  0047: return-void 
+Lcom/unrimsa/explore/TempleActivity;->onDestroy()V 0x4
+  registers 3 ins 1 outs 2
+  0000: iget-object v0, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0002: if-eqz v0, 0021
+  0004: invoke-virtual {v0}, Landroid/webkit/WebView;->getParent()Landroid/view/ViewParent;
+  0007: move-result-object v0
+  0008: instance-of v0, v0, Landroid/view/ViewGroup;
+  000a: if-eqz v0, 0019
+  000c: iget-object v0, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  000e: invoke-virtual {v0}, Landroid/webkit/WebView;->getParent()Landroid/view/ViewParent;
+  0011: move-result-object v0
+  0012: check-cast v0, Landroid/view/ViewGroup;
+  0014: iget-object v1, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0016: invoke-virtual {v0, v1}, Landroid/view/ViewGroup;->removeView(Landroid/view/View;)V
+  0019: iget-object v0, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  001b: invoke-virtual {v0}, Landroid/webkit/WebView;->destroy()V
+  001e: const/4 v0, 0
+  001f: iput-object v0, v2, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0021: invoke-super {v2}, Landroid/app/Activity;->onDestroy()V
+  0024: return-void 
+Lcom/unrimsa/explore/TempleActivity;->onPause()V 0x4
+  registers 4 ins 1 outs 3
+  0000: iget-object v0, v3, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0002: if-eqz v0, 000f
+  0004: const-string v1, 'window.pauseTemple&&window.pauseTemple()'
+  0006: const/4 v2, 0
+  0007: invoke-virtual {v0, v1, v2}, Landroid/webkit/WebView;->evaluateJavascript(Ljava/lang/String;Landroid/webkit/ValueCallback;)V
+  000a: iget-object v0, v3, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  000c: invoke-virtual {v0}, Landroid/webkit/WebView;->onPause()V
+  000f: invoke-super {v3}, Landroid/app/Activity;->onPause()V
+  0012: return-void 
+Lcom/unrimsa/explore/TempleActivity;->onResume()V 0x4
+  registers 2 ins 1 outs 1
+  0000: invoke-super {v1}, Landroid/app/Activity;->onResume()V
+  0003: iget-object v0, v1, Lcom/unrimsa/explore/TempleActivity;->viewer:Landroid/webkit/WebView;
+  0005: if-eqz v0, 000a
+  0007: invoke-virtual {v0}, Landroid/webkit/WebView;->onResume()V
+  000a: invoke-direct {v1}, Lcom/unrimsa/explore/TempleActivity;->immersive()V
+  000d: return-void 
+Lcom/unrimsa/explore/TempleActivity;->onWindowFocusChanged(Z)V 0x1
+  registers 2 ins 2 outs 2
+  0000: invoke-super {v0, v1}, Landroid/app/Activity;->onWindowFocusChanged(Z)V
+  0003: if-eqz v1, 0008
+  0005: invoke-direct {v0}, Lcom/unrimsa/explore/TempleActivity;->immersive()V
+  0008: return-void 

@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.unrimsa.explore'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.unrimsa.explore'
+        minSdk 26
+        targetSdk 35
+        versionCode 3
+        versionName '3.0'
+    }
+}
