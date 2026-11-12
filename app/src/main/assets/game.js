@@ -431,7 +431,7 @@ $('sound').onclick=()=>{
 function loadTexture(loader,key,path,isColor){
  return loader.loadAsync(path).then(t=>{
    if(isColor)t.colorSpace=T.SRGBColorSpace;
-   if(key!=='needles')t.wrapS=t.wrapT=T.RepeatWrapping;
+   if(!['needles','jindoCoat','tanghwa'].includes(key))t.wrapS=t.wrapT=T.RepeatWrapping;
    t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
    return [key,t];
  });
@@ -448,16 +448,16 @@ function statue(gltf){
  });
  const box=new T.Box3().setFromObject(model);
  const center=box.getCenter(new T.Vector3());
- const figureHeight=4.48;
+ const figureHeight=3.46;
  const factor=figureHeight/(box.max.y-box.min.y);
  const holder=new T.Group();
  model.position.set(-center.x*factor,-box.min.y*factor,-center.z*factor);
  model.scale.setScalar(factor);
  holder.add(model);
- holder.position.copy(world.statueBase);
+ holder.position.copy(world.statueBase).z+=.19;
  scene.add(holder);
  const base=world.statueBase;
- const key=new T.SpotLight('#fff1d4',88,20,.49,.64,1.7);
+ const key=new T.SpotLight('#fff1d4',66,18,.50,.70,1.7);
  key.position.copy(base).add(new T.Vector3(-3.6,4.42,5.3));
  key.target.position.copy(base).add(new T.Vector3(0,figureHeight*.60,.19));
  scene.add(key,key.target);
@@ -489,7 +489,7 @@ async function boot(){
    ['stone','stone.jpg',true],['wood','wood.jpg',true],['paper','paper.jpg',true],
    ['clay','clay.jpg',true],['earth','earth.jpg',true],['pond','pond.jpg',true],
    ['bark','bark.jpg',true],['needles','needles.png',true],['ripples','ripples.png',false],
-   ['weave','weave.jpg',true],['weaveNormal','weave-normal.jpg',false],['fur','jindo-fur.jpg',true],
+   ['weave','weave.jpg',true],['weaveNormal','weave-normal.jpg',false],['fur','jindo-fur.jpg',true],['jindoCoat','jindo-coat.jpg',true],
    ['tanghwa','tanghwa.jpg',true],['sutra1','sutra-1.jpg',true],['carpScales','carp-scales.jpg',true]
  ];
  const [items,buddha,maple,...animalsAndProps]=await Promise.all([
@@ -526,7 +526,7 @@ async function boot(){
  wake=waterWake(scene);
  smoke=createSmoke();
  walk=walking(world);
- animals=addAnimals(scene,walk.floorAt,models,maps.fur,world.actions);
+ animals=addAnimals(scene,walk.floorAt,models,maps.fur,world.actions,maps.jindoCoat);
  fish=aquaticLife(scene,maps.carpScales);
  monk=addMonk(scene,models['monk-rig'],maps,walk.floorAt,world.mallet);
  lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,lanterns);

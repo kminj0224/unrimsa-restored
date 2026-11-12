@@ -41,18 +41,7 @@ function pineModel(seed,detail){
    branches.push(g.toNonIndexed());g.dispose();
  }
  function card(start,end,spin,tint,width){
-   const direction=end.clone().sub(start);
-   const n=direction.clone().normalize();
-   const base=new T.Quaternion().setFromUnitVectors(down,n);
-   const length=direction.length();
-   const g=new T.PlaneGeometry(width,length,1,1);
-   g.rotateY(spin);
-   g.applyQuaternion(base);
-   g.translate(...start.clone().lerp(end,.5).toArray());
-   const col=[];
-   for(let j=0;j<4;j++)col.push(tint.r,tint.g,tint.b);
-   g.setAttribute('color',new T.Float32BufferAttribute(col,3));
-   needles.push(g.toNonIndexed());g.dispose();
+   needles.push(needleCard(start,end,spin,tint,width));
  }
  const top=[v(0,0,0),v(-.09,1.13,.08),v(.13,2.27,.03),v(.09,3.40,-.15),v(.35,4.40,-.26),v(.19,5.18,-.32),v(.34,5.88,-.29),v(.44,6.25,-.18)];
  branch(top,[.23,.17,.13,.105,.075,.055,.028,.008]);
@@ -79,14 +68,14 @@ function pineModel(seed,detail){
      const base=mid.clone().lerp(tip,t);
      const n=sample(rng,.22,.73)*(1-.46*t);
      const c=base.clone().addScaledVector(side,(j%2===0?-1:1)*n).addScaledVector(dir,n*.39).add(v(0,sample(rng,.06,.31),0));
-     if(detail)branch([base,c],[.018,.004]);
+     branch([base,c],[detail?.018:.012,.004]);
      const sprouts=detail?7:4;
      for(let k=0;k<sprouts;k++){
        const m=(k+.42)/sprouts;
        const b=base.clone().lerp(c,m);
-       b.addScaledVector(dir,sample(rng,-.14,.19));
+       const bend=sample(rng,-.14,.19);
        const angle=a+sample(rng,-1.75,1.75),sz=sample(rng,.31,.78);
-       const e=b.clone().add(v(Math.cos(angle)*sz*.68,sz*sample(rng,.34,.74),Math.sin(angle)*sz*.68));
+       const e=b.clone().add(v(Math.cos(angle)*sz*.68+bend,sz*sample(rng,.34,.74),Math.sin(angle)*sz*.68));
        const tint=color('#ffffff').multiplyScalar(sample(rng,.64,1.21));
        tint.g*=sample(rng,.96,1.06);
        card(b,e,rng()*TAU,tint,sz*.55);
@@ -145,40 +134,44 @@ function batchMaple(scene,model,positions){
  }
 }
 
-function woodlandPine(seed){
- const rng=random(seed),crowns=[];
- const trunk=new T.CylinderGeometry(.024,.19,5.95,7,1).translate(0,2.975,0);
- for(let i=0;i<25;i++){
-   const a=i*2.39996,f=i/24,y=1.62+f*4.31;
-   const length=(1.85*(1-f)+.38)*sample(rng,.72,1.22);
-   const x=Math.cos(a)*length*.62,z=Math.sin(a)*length*.62;
-   const tint=new T.Color('#ffffff').multiplyScalar(sample(rng,.74,1.02));
-   for(let j=0;j<3;j++){
-     const plane=new T.PlaneGeometry(length*.85,length*1.32,1,1);
-     plane.rotateX(-.57+j*.41).rotateY(-a+j*1.71);
-     plane.translate(x,y+.22*j,z);
-     const c=[];
-     for(let k=0;k<4;k++)c.push(tint.r,tint.g,tint.b);
-     plane.setAttribute('color',new T.Float32BufferAttribute(c,3));
-     crowns.push(plane.toNonIndexed());plane.dispose();
-   }
- }
- return {trunk,crown:combine(crowns)};
+function needleCard(start,end,spin,tint,width){
+ const direction=end.clone().sub(start);
+ const g=new T.PlaneGeometry(width,direction.length(),1,1);
+ g.rotateY(spin).applyQuaternion(new T.Quaternion().setFromUnitVectors(down,direction.normalize()));
+ g.translate(...start.clone().lerp(end,.5).toArray());
+ const col=[];
+ for(let j=0;j<4;j++)col.push(tint.r,tint.g,tint.b);
+ g.setAttribute('color',new T.Float32BufferAttribute(col,3));
+ const result=g.toNonIndexed();g.dispose();return result;
 }
 
-function distantPine(seed){
- const rng=random(seed),parts=[];
- for(let tier=0;tier<7;tier++){
-   const y=1.24+tier*.76,r=(1.52-tier*.184)*sample(rng,.81,1.14);
-   const g=new T.ConeGeometry(r,1.72-tier*.068,7,1).rotateY(rng()*TAU).translate(
-     sample(rng,-.19,.19),y+.70,sample(rng,-.19,.19));
-   const tint=new T.Color(tier%2===0?'#475e3c':'#526743').multiplyScalar(sample(rng,.80,1.10));
-   const color=[];
-   for(let i=0;i<g.getAttribute('position').count;i++)color.push(tint.r,tint.g,tint.b);
-   g.setAttribute('color',new T.Float32BufferAttribute(color,3));
-   parts.push(g.toNonIndexed());g.dispose();
+function woodlandPine(seed,far=false){
+ const rng=random(seed),bark=[],needles=[];
+ const trunk=new T.CylinderGeometry(.025,.19,6.06,far?5:7,1).translate(0,2.95,0);
+ bark.push(trunk.toNonIndexed());trunk.dispose();
+ const branches=far?10:19;
+ for(let i=0;i<branches;i++){
+   const a=i*2.39996,f=i/(branches-1),y=1.61+f*4.14;
+   const length=(1.85*(1-f)+.35)*sample(rng,.75,1.23);
+   const root=v(0,y,0);
+   const endpoint=v(Math.cos(a)*length,y+.19+f*.17,Math.sin(a)*length);
+   const direction=endpoint.clone().sub(root);
+   const bough=new T.CylinderGeometry(.016,.062*(1-f)+.028,direction.length(),far?3:6,1,far);
+   bough.applyQuaternion(new T.Quaternion().setFromUnitVectors(down,direction.clone().normalize()));
+   bough.translate(...root.clone().lerp(endpoint,.5).toArray());bark.push(bough.toNonIndexed());bough.dispose();
+   const clumps=far?3:5;
+   for(let j=0;j<clumps;j++){
+     const ratio=.42+.57*j/(clumps-1);
+     const twig=root.clone().lerp(endpoint,ratio);
+     const turn=a+(j%2===0?.68:-.77);
+     const size=sample(rng,.62,1.11)*(1.08-.25*f);
+     const tip=twig.clone().add(v(Math.cos(turn)*size*.62,size*.73,Math.sin(turn)*size*.62));
+     const tint=color('#ffffff').multiplyScalar(sample(rng,.68,.99));
+     needles.push(needleCard(twig,tip,a*.53,tint,size*.73));
+     if(!far||j===2)needles.push(needleCard(twig,tip,a*.53+Math.PI/2,tint,size*.66));
+   }
  }
- return combine(parts);
+ return {trunk:combine(bark),crown:combine(needles)};
 }
 
 export function plantForest(scene,world,maps,maple){
@@ -246,8 +239,11 @@ export function plantForest(scene,world,maps,maple){
  batchInstances(scene,newTrees.trunk,bark,edge);
  batchInstances(scene,newTrees.crown,needles,edge);
  batchMaple(scene,maple,maples);
- const canopy=new T.MeshStandardMaterial({vertexColors:true,roughness:1});
- for(let i=0;i<distant.length;i++)instance(scene,distantPine(23041+31*i),canopy,distant[i],false);
+ for(let i=0;i<distant.length;i++){
+   const lod=woodlandPine(23041+31*i,true);
+   instance(scene,lod.trunk,bark,distant[i],false);
+   instance(scene,lod.crown,needles,distant[i],false);
+ }
  return {pines:pinePositions.reduce((s,a)=>s+a.length,edge.length)+distant.reduce((n,a)=>n+a.length,0),maples:maples.length};
 }
 

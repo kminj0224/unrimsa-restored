@@ -1,6 +1,7 @@
 import * as T from './vendor/three.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {textiles} from './furnishings.js';
+import {decorateHall} from './hall-decor.js';
 
 export const sanctuary={id:'main',name:'대웅전',x:-4,z:-16.55,w:22.4,d:13.4,h:6.55,floor:2.40};
 export const rooms=[
@@ -371,39 +372,17 @@ export function buildWorld(scene,maps,models={}){
      box(x,y+.22,sh,8.28,.91,2.63,red);
      box(x,y+1.13,sh,8.53,.16,2.83,tan);
      statueBase.set(x,y+pedestal,sh);
-     if(maps.tanghwa){
-       const artZ=z-d/2+.41,artY=y+3.60,artW=5.65,artH=4.61;
-       const hanging=new T.Mesh(new T.PlaneGeometry(artW,artH),new T.MeshStandardMaterial({
-         map:maps.tanghwa,roughness:.88,bumpMap:maps.paper,bumpScale:.008
-       }));
-       hanging.name='Yeongsan Hoesangdo';
-       hanging.position.set(x,artY,artZ);hanging.receiveShadow=true;scene.add(hanging);
-       box(x,artY-artH/2-.18,artZ-.039,artW+.42,artH+.34,.094,red);
-       for(const bar of [-1,1]){
-         pipe([x-artW/2-.25,artY+bar*(artH/2+.057),artZ+.036],
-           [x+artW/2+.25,artY+bar*(artH/2+.057),artZ+.036],.067,.067,dark,undefined,16);
-       }
-       for(const sign of [-1,1]){
-         box(x+sign*(artW/2+.13),artY-artH/2-.086,artZ+.015,.16,artH+.172,.037,tan);
-         sweep([[x+sign*artW*.39,artY+artH/2+.058,artZ+.04],[x+sign*artW*.21,artY+artH/2+.28,artZ-.03],
-           [x,artY+artH/2+.36,artZ-.06]],.022,dark);
-       }
-     }
+     decorateHall(scene,r,sh,maps,{add,box,round,pipe,sweep});
      for(const side of [-1,1]){
-       const pos=x+side*3.72;
-       for(let tier=0;tier<3;tier++){
-         const w=.45+tier*.23;
-         box(pos,y+5.62+tier*.135,sh,.32+tier*.34,.13,w,tier===1?red:teal);
-         box(pos,y+5.67+tier*.135,sh+.5,w,.09,.18,tan);
+       for(const dx of [2.25,3.09]){
+         round(x+side*dx,y+pedestal,sh+.68,[[.09,0],[.14,.035],[.100,.10],[.137,.17],[.18,.27],[.155,.30],[.098,.21]],ceramic,undefined,34);
        }
-       round(x+side*2.12,y+pedestal,sh+.67,[[.09,0],[.132,.038],[.094,.10],[.135,.17],[.18,.27],[.155,.30],[.095,.21]],ceramic,undefined,34);
-     }
-     box(x,y+6.02,sh,8.14,.20,.48,dark);
-     box(x,y+5.95,sh+.035,8.16,.087,.63,red);
-     for(let i=-9;i<=9;i++){
-       const px=x+i*.40;
-       box(px,y+5.991,sh+.356,.20,.076,.027,teal);
-       box(px,y+6.065,sh+.289,.21,.024,.048,tan);
+       const lowerX=x+side*2.15,frontZ=sh+1.80;
+       box(lowerX,y,frontZ,1.45,.76,.62,dark);
+       box(lowerX,y+.72,frontZ,1.57,.105,.69,wood);
+       for(const dx of [-.44,0,.44])round(lowerX+dx,y+.82,frontZ,
+         [[.105,0],[.145,.027],[.112,.062],[.066,.092],[.064,.21],[.095,.26],[.118,.30],[.107,.315],[.091,.27]],brass,undefined,27);
+       solid(lowerX,frontZ,1.57,.69);
      }
      for(let i=-6;i<=6;i++){
        const xx=x+i*.60;

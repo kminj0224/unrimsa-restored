@@ -71,16 +71,18 @@ function catModel(parent,source){
    body.scale.y=1+.015*Math.sin(t*2.2);
  }};
 }
-function guardHair(material,texture){
+function guardHair(material,texture,coatPhoto){
  material.color.copy(furTone);
  material.roughness=.89;
  material.onBeforeCompile=shader=>{
    shader.uniforms.coatMap={value:texture};
+   shader.uniforms.coatPhoto={value:coatPhoto??texture};
+   shader.uniforms.coatPhotoWeight={value:coatPhoto?1:0};
    shader.vertexShader=shader.vertexShader
      .replace('#include <common>','#include <common>\nvarying vec3 furPosition;')
      .replace('#include <begin_vertex>','#include <begin_vertex>\nfurPosition = position;');
    shader.fragmentShader=shader.fragmentShader
-     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;\nuniform sampler2D coatMap;')
+     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;\nuniform sampler2D coatMap;\nuniform sampler2D coatPhoto;\nuniform float coatPhotoWeight;')
      .replace('#include <color_fragment>',`#include <color_fragment>
        vec3 p=furPosition;
        vec3 coatNormal=normalize(cross(dFdx(p),dFdy(p)));
@@ -98,7 +100,14 @@ function guardHair(material,texture){
        vec3 strandZ=texture2D(coatMap,vec2(p.x*3.6,p.y*2.9)).rgb;
        vec3 albedo=strandX*blend.x+strandY*blend.y+strandZ*blend.z;
        float fine=dot(albedo,vec3(.24,.65,.11));
-       diffuseColor.rgb*=(.64+.70*fine)*(1.0+fade*.061*detail+lowerBand*.016);
+       vec2 sideUV=clamp(vec2((p.z+.50)/1.24,p.y/1.15),.003,.997);
+       vec2 faceUV=clamp(vec2((p.x+.205)/.410,(p.y-.64)/.51),.003,.997);
+       vec3 sideCoat=texture2D(coatPhoto,vec2(sideUV.x,.5+sideUV.y*.5)).rgb;
+       vec3 faceCoat=texture2D(coatPhoto,vec2(faceUV.x,faceUV.y*.5)).rgb;
+       float front=smoothstep(.30,.86,coatNormal.z)*smoothstep(.31,.55,p.z)*smoothstep(.64,.77,p.y);
+       vec3 photoCoat=mix(sideCoat,faceCoat,front);
+       diffuseColor.rgb=mix(diffuseColor.rgb,photoCoat,coatPhotoWeight*.83);
+       diffuseColor.rgb*=(.76+.43*fine)*(1.0+fade*.045*detail+lowerBand*.011);
      `);
  };
  return material;
@@ -114,7 +123,7 @@ function coatStrands(skin,count,tail=false){
    p.fromBufferAttribute(vertices,index);
    n.fromBufferAttribute(normals,index);
    if(!tail&&(p.y<.095||(p.z>.50&&p.y>.72)))continue;
-   const long=tail?.013+rand()*.015:.005+rand()*.015*(p.y>.43?1:.46);
+   const long=tail?.014+rand()*.018:.004+rand()*.010*(p.y>.43?1:.46);
    tangent.set(0,-.69,-.72).addScaledVector(n,-(n.y*-.69+n.z*-.72));
    tangent.normalize();
    cross.crossVectors(tangent,n).normalize().multiplyScalar(long*.074);
@@ -133,20 +142,53 @@ function coatStrands(skin,count,tail=false){
  skin.add(coat);
  return coat;
 }
-function dogModel(parent,source,texture){
+function reshapeJindo(mesh){
+ mesh.geometry=mesh.geometry.clone();
+ const points=mesh.geometry.getAttribute('position');
+ for(let i=0;i<points.count;i++){
+   const x=points.getX(i),y=points.getY(i),z=points.getZ(i);
+   const ear=T.MathUtils.smoothstep(y,.916,1.14);
+   const cheek=T.MathUtils.smoothstep(y,.62,.83)*(1-T.MathUtils.smoothstep(y,.88,.98));
+   const face=T.MathUtils.smoothstep(z,.35,.51);
+   points.setXYZ(i,x*(1+.10*cheek*face)-Math.sign(x)*ear*.024,y-ear*.032,z-ear*.027);
+ }
+ mesh.geometry.computeVertexNormals();
+ mesh.geometry.computeBoundingSphere();
+}
+function dogModel(parent,source,texture,coatPhoto){
  const root=makeRoot(parent,'Jindo');
  const body=source.clone(true);
  const skin=body.getObjectByName('JindoBody');
- skin.geometry=skin.geometry.clone();
+ reshapeJindo(skin);
+ body.traverse(mesh=>{
+   if(!mesh.isMesh)return;
+   if(mesh.name.startsWith('Pinna inset')){
+     reshapeJindo(mesh);
+     mesh.material=mesh.material.clone();
+     mesh.material.color.set('#947a67');
+     mesh.material.roughness=.94;
+   }
+   if(mesh.name.startsWith('Eye')||mesh.name.startsWith('Pupil')||mesh.name.startsWith('Upper and lower eye rim')){
+     const side=Math.sign(mesh.position.x);
+     mesh.position.x+=side*.009;
+     mesh.scale.y*=.75;
+     mesh.scale.z*=.76;
+     mesh.rotateZ(side*.18);
+   }
+   if(mesh.name==='Nose leather'){
+     mesh.material=mesh.material.clone();
+     mesh.material.roughness=.51;
+     mesh.scale.y*=.90;
+   }
+ });
  const step=gait(skin,true);
  const tail=body.getObjectByName('JindoTail');
  const pivot=new T.Group();
  pivot.position.set(0,.624,-.423);
  body.add(pivot);
  pivot.attach(tail);
- const coat=guardHair(skin.material.clone(),texture);
- skin.material=coat;
- tail.material=coat;
+ skin.material=guardHair(skin.material.clone(),texture,coatPhoto);
+ tail.material=guardHair(tail.material.clone(),texture);
  const strands=coatStrands(skin,9200),tailStrands=coatStrands(tail,2300,true);
  const moveStrands=gait(strands,true);
  const claws=[];
@@ -252,9 +294,9 @@ function birdModel(parent,source,x,y,z,seed){
  };
 }
 
-export function addAnimals(scene,ground,models,furTexture,actions=[]){
+export function addAnimals(scene,ground,models,furTexture,actions=[],coatPhoto){
  const group=makeRoot(scene,'Temple animals');
- const dog=dogModel(group,models.jindo,furTexture);
+ const dog=dogModel(group,models.jindo,furTexture,coatPhoto);
  const cat=catModel(group,models.cat);
  const peg=new T.Vector3(-20.11,ground(-20.11,-5.03)+.42,-5.03);
  const ropeMaterial=new T.MeshStandardMaterial({color:'#776544',roughness:1});
