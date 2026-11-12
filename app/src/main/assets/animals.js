@@ -195,11 +195,11 @@ function sparrowPlumage(material){
        float crown=head*smoothstep(.067,.080,p.y);
        float cheeks=head*smoothstep(.008,.015,abs(p.z))*smoothstep(.051,.059,p.y)*(1.0-smoothstep(.071,.078,p.y));
        vec3 spot=(vec3(p.x,p.y,abs(p.z))-vec3(.035,.063,.018))/vec3(.0059,.0052,.013);
-       float patch=(1.0-smoothstep(.72,1.25,length(spot)))*cheeks;
+       float cheekMark=(1.0-smoothstep(.72,1.25,length(spot)))*cheeks;
        vec3 warm=vec3(.251,.103,.047);
        diffuseColor.rgb=mix(diffuseColor.rgb,warm,crown*.84);
        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.61,.53,.42),cheeks*.90);
-       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.043,.030,.022),patch*.94);
+       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.043,.030,.022),cheekMark*.94);
        float fibers=sin(p.x*4060.0+p.y*1680.0+sin(p.z*1170.0)*1.2);
        float row=sin(p.y*1650.0+p.z*2200.0+sin(p.x*690.0)*1.1);
        float fade=1.0-smoothstep(.05,.78,max(fwidth(fibers),fwidth(row)));
