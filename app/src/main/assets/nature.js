@@ -86,28 +86,29 @@ function pineModel(seed,detail){
  return {bark:combine(branches),needles:combine(needles)};
 }
 
-function instance(scene,geometry,material,items,shadow){
+function instance(scene,geometry,material,items,shadow,receiveShadow){
  if(!items.length)return;
  const mesh=new T.InstancedMesh(geometry,material,items.length);
  items.forEach(({x,y,z,scale,angle},i)=>{
    temp.position.set(x,y,z);temp.rotation.set(0,angle,0);temp.scale.setScalar(scale);temp.updateMatrix();
    mesh.setMatrixAt(i,temp.matrix);
  });
- mesh.castShadow=shadow;mesh.receiveShadow=true;
+ mesh.castShadow=shadow;mesh.receiveShadow=receiveShadow;
  mesh.computeBoundingSphere();
  scene.add(mesh);
 }
 
-function batchInstances(scene,geometry,material,items){
+function batchInstances(scene,geometry,material,items,background=false){
  const buckets=new Map();
  for(const item of items){
-   const key=Math.floor(item.x/21)+','+Math.floor(item.z/21);
+   const size=background?41:21;
+   const key=Math.floor(item.x/size)+','+Math.floor(item.z/size);
    if(!buckets.has(key))buckets.set(key,[]);
    buckets.get(key).push(item);
  }
  for(const chunk of buckets.values()){
-   const shade=chunk.some(p=>Math.abs(p.x)<38&&Math.abs(p.z)<36);
-   instance(scene,geometry,material,chunk,shade);
+   const shade=!background&&chunk.some(p=>Math.abs(p.x)<38&&Math.abs(p.z)<36);
+   instance(scene,geometry,material,chunk,shade,!background);
  }
 }
 
@@ -149,7 +150,7 @@ function woodlandPine(seed,far=false){
  const rng=random(seed),bark=[],needles=[];
  const trunk=new T.CylinderGeometry(.025,.19,6.06,far?5:7,1).translate(0,2.95,0);
  bark.push(trunk.toNonIndexed());trunk.dispose();
- const branches=far?10:19;
+ const branches=far?7:19;
  for(let i=0;i<branches;i++){
    const a=i*2.39996,f=i/(branches-1),y=1.61+f*4.14;
    const length=(1.85*(1-f)+.35)*sample(rng,.75,1.23);
@@ -159,7 +160,7 @@ function woodlandPine(seed,far=false){
    const bough=new T.CylinderGeometry(.016,.062*(1-f)+.028,direction.length(),far?3:6,1,far);
    bough.applyQuaternion(new T.Quaternion().setFromUnitVectors(down,direction.clone().normalize()));
    bough.translate(...root.clone().lerp(endpoint,.5).toArray());bark.push(bough.toNonIndexed());bough.dispose();
-   const clumps=far?3:5;
+   const clumps=far?2:5;
    for(let j=0;j<clumps;j++){
      const ratio=.42+.57*j/(clumps-1);
      const twig=root.clone().lerp(endpoint,ratio);
@@ -168,7 +169,7 @@ function woodlandPine(seed,far=false){
      const tip=twig.clone().add(v(Math.cos(turn)*size*.62,size*.73,Math.sin(turn)*size*.62));
      const tint=color('#ffffff').multiplyScalar(sample(rng,.68,.99));
      needles.push(needleCard(twig,tip,a*.53,tint,size*.73));
-     if(!far||j===2)needles.push(needleCard(twig,tip,a*.53+Math.PI/2,tint,size*.66));
+     if(!far||j===1)needles.push(needleCard(twig,tip,a*.53+Math.PI/2,tint,size*.66));
    }
  }
  return {trunk:combine(bark),crown:combine(needles)};
@@ -239,11 +240,13 @@ export function plantForest(scene,world,maps,maple){
  batchInstances(scene,newTrees.trunk,bark,edge);
  batchInstances(scene,newTrees.crown,needles,edge);
  batchMaple(scene,maple,maples);
- for(let i=0;i<distant.length;i++){
-   const lod=woodlandPine(23041+31*i,true);
-   instance(scene,lod.trunk,bark,distant[i],false);
-   instance(scene,lod.crown,needles,distant[i],false);
- }
+ const farBark=new T.MeshLambertMaterial({color:'#786d5a'});
+ const farNeedles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,
+   side:T.DoubleSide,color:'#b0c38c'});
+ const background=distant.flat();
+ const distantPine=woodlandPine(23041,true);
+ batchInstances(scene,distantPine.trunk,farBark,background,true);
+ batchInstances(scene,distantPine.crown,farNeedles,background,true);
  return {pines:pinePositions.reduce((s,a)=>s+a.length,edge.length)+distant.reduce((n,a)=>n+a.length,0),maples:maples.length};
 }
 
@@ -371,12 +374,12 @@ function riverPlane(){
 }
 
 export function addWater(scene,maps,lightDirection){
- let reflectionPass=false;
+ let reflectionPass=false,nextReflectionAt=0;
  const waters=[];
  const lakeShape=new T.CircleGeometry(1,88).scale(pond.rx,pond.rz,1);
  const entries=[
-   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#2e5c43',width:384,height:256,scale:1.5,rate:.46,near:23},
-   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#4b7f69',width:384,height:208,scale:1.02,rate:.78,near:35}
+   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#2e5c43',width:320,height:224,scale:1.5,rate:.46,near:23},
+   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#4b7f69',width:320,height:192,scale:1.02,rate:.78,near:31}
  ];
  for(const data of entries){
    const water=new Water(data.shape,{textureWidth:data.width,textureHeight:data.height,clipBias:.0018,
@@ -393,27 +396,33 @@ export function addWater(scene,maps,lightDirection){
    scene.add(water);
    waters.push(water);
    const mirror=water.onBeforeRender;
-   let lastFrame=-1;
+   let lastReflection=-Infinity;
    const lastPosition=new T.Vector3(Infinity,0,0);
    const lastRotation=new T.Quaternion(0,0,0,0);
    water.onBeforeRender=(renderer,scene0,camera)=>{
      if(reflectionPass)return;
-     const frame=renderer.info.render.frame;
+     const now=performance.now();
      const delta=lastPosition.distanceToSquared(camera.position);
      const turned=1-Math.abs(lastRotation.dot(camera.quaternion));
      const distance=water===waters[0]
        ?Math.hypot(camera.position.x-pond.x,camera.position.z-pond.z)
        :Math.abs(camera.position.x-river(camera.position.z));
      water.material.uniforms.eye.value.copy(camera.position);
-     if(lastFrame>=0 && (frame-lastFrame<3 || (delta<.0006&&turned<.00003)))return;
-     if(distance>water.userData.distance&&lastFrame>=0)return;
+     const range=water.userData.distance;
+     const aboveSurface=camera.position.y>water.position.y+.01;
+     water.material.uniforms.reflectionMix.value=aboveSurface&&Number.isFinite(lastReflection)
+       ?1-T.MathUtils.smoothstep(distance,range-5,range):0;
+     if(!aboveSurface||distance>=range||now<nextReflectionAt||now-lastReflection<150)return;
+     if(now-lastReflection<2500&&delta<.009&&turned<.00018)return;
      reflectionPass=true;
      const other=waters.find(x=>x!==water);
      const wasVisible=other?.visible;
      if(other)other.visible=false;
      try{
        mirror(renderer,scene0,camera);
-       lastPosition.copy(camera.position);lastRotation.copy(camera.quaternion);lastFrame=frame;
+       lastPosition.copy(camera.position);lastRotation.copy(camera.quaternion);
+       lastReflection=now;nextReflectionAt=now+95;
+       water.material.uniforms.reflectionMix.value=1-T.MathUtils.smoothstep(distance,range-5,range);
      }finally{
        if(other)other.visible=wasVisible;
        reflectionPass=false;

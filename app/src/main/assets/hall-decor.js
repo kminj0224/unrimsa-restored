@@ -67,6 +67,7 @@ export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
    const paintingLight=new T.SpotLight('#fff0ce',92,11,.63,.67,1.8);
    paintingLight.position.set(x+1.03,y+5.38,artZ+3.83);
    paintingLight.target.position.set(x,artY+.54,artZ);
+   paintingLight.userData.hallOnly=true;
    scene.add(paintingLight,paintingLight.target);
  }
 
@@ -153,8 +154,8 @@ export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
    }
    const lamp=new T.PointLight('#ffc48c',row===0?13:8,8.4,1.68);
    lamp.position.set(lx,y+4.0,z+(row===0?-1.6:2.4));
-   scene.add(lamp);
+   lamp.userData.hallOnly=true;scene.add(lamp);
  }
  const fill=new T.PointLight('#ffe4b2',12,12,1.57);
- fill.position.set(x,y+4.68,z+2.65);scene.add(fill);
+ fill.position.set(x,y+4.68,z+2.65);fill.userData.hallOnly=true;scene.add(fill);
 }

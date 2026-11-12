@@ -75,6 +75,7 @@ class Water extends Mesh {
 				{
 					'normalSampler': { value: null },
 					'mirrorSampler': { value: null },
+					'reflectionMix': { value: 0 },
 					'alpha': { value: 1.0 },
 					'time': { value: 0.0 },
 					'size': { value: 1.0 },
@@ -115,6 +116,7 @@ class Water extends Mesh {
 
 			fragmentShader: /* glsl */`
 				uniform sampler2D mirrorSampler;
+				uniform float reflectionMix;
 				uniform float alpha;
 				uniform float time;
 				uniform float size;
@@ -164,9 +166,13 @@ class Water extends Mesh {
                     vec3 eyeDirection = normalize( worldToEye );
                     float theta = clamp( dot( eyeDirection, surfaceNormal ), 0., 1. );
                     float reflectance = .035 + .965 * pow( 1. - theta, 4.75 );
-                    vec2 mirrorUv = mirrorCoord.xy / mirrorCoord.w;
-                    vec2 distortion = surfaceNormal.xz * distortionScale * ( .017 + .085 / max( 2., dist ) );
-                    vec3 reflection = texture2D( mirrorSampler, clamp( mirrorUv + distortion, .002, .998 ) ).rgb;
+                    vec3 reflection = waterColor * .73 + sunColor * .12;
+                    if ( reflectionMix > 0. ) {
+                        vec2 mirrorUv = mirrorCoord.xy / max( abs( mirrorCoord.w ), .0001 );
+                        vec2 distortion = surfaceNormal.xz * distortionScale * ( .017 + .085 / max( 2., dist ) );
+                        vec3 mirror = texture2D( mirrorSampler, clamp( mirrorUv + distortion, .002, .998 ) ).rgb;
+                        reflection = mix( reflection, mirror, reflectionMix );
+                    }
                     float sunGlint = pow( max( 0., dot( eyeDirection, reflect( -sunDirection, surfaceNormal ) ) ), 83. );
                     float broadGlint = pow( max( 0., dot( eyeDirection, reflect( -sunDirection, surfaceNormal ) ) ), 20. );
                     float shade = getShadowMask();

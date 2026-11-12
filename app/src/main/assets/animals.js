@@ -73,41 +73,36 @@ function catModel(parent,source){
 }
 function guardHair(material,texture,coatPhoto){
  material.color.copy(furTone);
- material.roughness=.89;
+ material.roughness=.88;
  material.onBeforeCompile=shader=>{
-   shader.uniforms.coatMap={value:texture};
-   shader.uniforms.coatPhoto={value:coatPhoto??texture};
+   shader.uniforms.coatMap={value:coatPhoto??texture};
    shader.uniforms.coatPhotoWeight={value:coatPhoto?1:0};
+   const varyings='varying vec3 furPosition;\nvarying vec3 furNormal;';
    shader.vertexShader=shader.vertexShader
-     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;')
-     .replace('#include <begin_vertex>','#include <begin_vertex>\nfurPosition = position;');
+     .replace('#include <common>','#include <common>\n'+varyings)
+     .replace('#include <begin_vertex>','#include <begin_vertex>\nfurPosition = position;\nfurNormal = normal;');
    shader.fragmentShader=shader.fragmentShader
-     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;\nuniform sampler2D coatMap;\nuniform sampler2D coatPhoto;\nuniform float coatPhotoWeight;')
+     .replace('#include <common>','#include <common>\n'+varyings+'\nuniform sampler2D coatMap;\nuniform float coatPhotoWeight;')
      .replace('#include <color_fragment>',`#include <color_fragment>
        vec3 p=furPosition;
-       vec3 coatNormal=normalize(cross(dFdx(p),dFdy(p)));
-       float u=p.x*1840.0+p.y*120.0+sin(p.z*50.0)*.85;
-       float v=p.z*1550.0-p.y*245.0+sin(p.x*37.0)*1.3;
-       float f1=sin(u+sin(p.z*120.0)*1.5);
-       float f2=sin(v+sin(p.x*145.0)*1.4);
-       float detail=mix(f1,f2,smoothstep(.2,.7,abs(coatNormal.x)));
-       float fade=1.0-smoothstep(.65,5.0,max(fwidth(u),fwidth(v)));
-       float lowerBand=sin(p.z*230.0+p.x*190.0+sin(p.y*95.0)*2.0);
-       vec3 blend=pow(abs(coatNormal)+.001,vec3(4.0));
-       blend/=dot(blend,vec3(1.0));
-       vec3 strandX=texture2D(coatMap,vec2(p.z*3.6,p.y*2.9-p.z*.7)).rgb;
-       vec3 strandY=texture2D(coatMap,vec2(p.x*3.6,p.z*2.9)).rgb;
-       vec3 strandZ=texture2D(coatMap,vec2(p.x*3.6,p.y*2.9)).rgb;
-       vec3 albedo=strandX*blend.x+strandY*blend.y+strandZ*blend.z;
-       float fine=dot(albedo,vec3(.24,.65,.11));
-       vec2 sideUV=clamp(vec2((p.z+.50)/1.24,p.y/1.15),.003,.997);
-       vec2 faceUV=clamp(vec2((p.x+.205)/.410,(p.y-.64)/.51),.003,.997);
-       vec3 sideCoat=texture2D(coatPhoto,vec2(sideUV.x,.5+sideUV.y*.5)).rgb;
-       vec3 faceCoat=texture2D(coatPhoto,vec2(faceUV.x,faceUV.y*.5)).rgb;
-       float front=smoothstep(.30,.86,coatNormal.z)*smoothstep(.31,.55,p.z)*smoothstep(.64,.77,p.y);
-       vec3 photoCoat=mix(sideCoat,faceCoat,front);
-       diffuseColor.rgb=mix(diffuseColor.rgb,photoCoat,coatPhotoWeight*.83);
-       diffuseColor.rgb*=(.76+.43*fine)*(1.0+fade*.045*detail+lowerBand*.011);
+       if(coatPhotoWeight>0.5){
+         vec3 n=normalize(furNormal);
+         vec2 sideUV=clamp(vec2((p.z+.50)/1.24,p.y/1.15),.005,.995);
+         vec2 faceUV=clamp(vec2((p.x+.205)/.410,(p.y-.64)/.51),.005,.995);
+         vec3 coat=texture2D(coatMap,vec2(sideUV.x,.5+sideUV.y*.5)).rgb;
+         float front=smoothstep(.23,.75,n.z)*smoothstep(.28,.53,p.z)*smoothstep(.64,.75,p.y);
+         if(front>.015){
+           vec3 faceCoat=texture2D(coatMap,vec2(faceUV.x,faceUV.y*.5)).rgb;
+           coat=mix(coat,faceCoat,front);
+         }
+         float belly=smoothstep(.25,.72,-n.y)*smoothstep(.32,.48,p.y);
+         float muzzle=smoothstep(.55,.67,p.z)*smoothstep(.72,.78,p.y);
+         diffuseColor.rgb=mix(diffuseColor.rgb,coat,.91)*mix(vec3(1.0),vec3(.84,.78,.71),belly*.34);
+         diffuseColor.rgb=mix(diffuseColor.rgb,coat*vec3(.93,.93,.94),muzzle*.29);
+       }else{
+         vec3 tailCoat=texture2D(coatMap,vec2(p.z*2.6+p.x*1.9,p.y*3.0-p.z)).rgb;
+         diffuseColor.rgb*=.73+.40*tailCoat;
+       }
      `);
  };
  return material;
@@ -123,7 +118,7 @@ function coatStrands(skin,count,tail=false){
    p.fromBufferAttribute(vertices,index);
    n.fromBufferAttribute(normals,index);
    if(!tail&&(p.y<.095||(p.z>.50&&p.y>.72)))continue;
-   const long=tail?.014+rand()*.018:.004+rand()*.010*(p.y>.43?1:.46);
+   const long=tail?.014+rand()*.014:.004+rand()*.009*(p.y>.43?1:.46);
    tangent.set(0,-.69,-.72).addScaledVector(n,-(n.y*-.69+n.z*-.72));
    tangent.normalize();
    cross.crossVectors(tangent,n).normalize().multiplyScalar(long*.074);
@@ -138,7 +133,7 @@ function coatStrands(skin,count,tail=false){
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
  geo.computeVertexNormals();
  const material=new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.91});
- const coat=new T.Mesh(geo,material);coat.receiveShadow=true;
+ const coat=new T.Mesh(geo,material);coat.name=tail?'Jindo tail guard hairs':'Jindo guard hairs';coat.receiveShadow=true;
  skin.add(coat);
  return coat;
 }
@@ -150,10 +145,30 @@ function reshapeJindo(mesh){
    const ear=T.MathUtils.smoothstep(y,.916,1.14);
    const cheek=T.MathUtils.smoothstep(y,.62,.83)*(1-T.MathUtils.smoothstep(y,.88,.98));
    const face=T.MathUtils.smoothstep(z,.35,.51);
-   points.setXYZ(i,x*(1+.10*cheek*face)-Math.sign(x)*ear*.024,y-ear*.032,z-ear*.027);
+   const muzzle=T.MathUtils.smoothstep(z,.50,.66)*T.MathUtils.smoothstep(y,.70,.78);
+   const brow=T.MathUtils.smoothstep(y,.83,.91)*(1-T.MathUtils.smoothstep(y,.92,.97))*face;
+   points.setXYZ(i,x*(1+.13*cheek*face-.14*muzzle)-Math.sign(x)*ear*.029,
+     y-ear*.040+brow*.012,z-ear*.036+muzzle*.007);
  }
  mesh.geometry.computeVertexNormals();
  mesh.geometry.computeBoundingSphere();
+}
+function muzzleWhiskers(body){
+ const points=[];
+ for(const side of [-1,1])for(let i=0;i<6;i++){
+   const y=.774+(i%3)*.009,z=.628-Math.floor(i/3)*.021;
+   const curve=new T.QuadraticBezierCurve3(
+     new T.Vector3(side*(.047+i*.0015),y,z),
+     new T.Vector3(side*(.069+i*.003),y+.005,z+.006),
+     new T.Vector3(side*(.093+i*.004),y-.008-i*.002,z-.017-i*.003)
+   ).getPoints(5);
+   for(let j=1;j<curve.length;j++)points.push(curve[j-1],curve[j]);
+ }
+ const mesh=new T.LineSegments(new T.BufferGeometry().setFromPoints(points),
+   new T.LineBasicMaterial({color:'#928776',transparent:true,opacity:.56}));
+ mesh.name='Jindo muzzle whiskers';
+ body.add(mesh);
+ return mesh;
 }
 function dogModel(parent,source,texture,coatPhoto){
  const root=makeRoot(parent,'Jindo');
@@ -165,20 +180,24 @@ function dogModel(parent,source,texture,coatPhoto){
    if(mesh.name.startsWith('Pinna inset')){
      reshapeJindo(mesh);
      mesh.material=mesh.material.clone();
-     mesh.material.color.set('#947a67');
+     mesh.material.color.set('#a58975');
      mesh.material.roughness=.94;
    }
    if(mesh.name.startsWith('Eye')||mesh.name.startsWith('Pupil')||mesh.name.startsWith('Upper and lower eye rim')){
      const side=Math.sign(mesh.position.x);
-     mesh.position.x+=side*.009;
-     mesh.scale.y*=.75;
-     mesh.scale.z*=.76;
-     mesh.rotateZ(side*.18);
+     mesh.position.x+=side*.007;
+     mesh.scale.y*=.70;
+     mesh.scale.z*=.78;
+     mesh.rotateZ(side*.25);
+     mesh.material=mesh.material.clone();
+     if(mesh.name.startsWith('Eye'))mesh.material.color.set('#533722');
    }
    if(mesh.name==='Nose leather'){
      mesh.material=mesh.material.clone();
-     mesh.material.roughness=.51;
-     mesh.scale.y*=.90;
+     mesh.material.roughness=.44;
+     mesh.material.color.set('#211e1c');
+     mesh.scale.y*=.86;
+     mesh.position.z+=.005;
    }
  });
  const step=gait(skin,true);
@@ -189,7 +208,8 @@ function dogModel(parent,source,texture,coatPhoto){
  pivot.attach(tail);
  skin.material=guardHair(skin.material.clone(),texture,coatPhoto);
  tail.material=guardHair(tail.material.clone(),texture);
- const strands=coatStrands(skin,9200),tailStrands=coatStrands(tail,2300,true);
+ const strands=coatStrands(skin,2600),tailStrands=coatStrands(tail,720,true);
+ const whiskers=muzzleWhiskers(body);
  const moveStrands=gait(strands,true);
  const claws=[];
  body.traverse(o=>{
@@ -212,7 +232,7 @@ function dogModel(parent,source,texture,coatPhoto){
  return {root,ring:metalRing,pose(t,pace,near,reaction=0){
    const phase=t*7.2;
    step(phase,pace);
-   strands.visible=tailStrands.visible=near;
+   strands.visible=tailStrands.visible=whiskers.visible=near;
    if(near)moveStrands(phase,pace);
    for(const [n,base] of claws){
      const {leg,diagonal}=weight(base.x,base.y,base.z,true);
@@ -365,7 +385,7 @@ export function addAnimals(scene,ground,models,furTexture,actions=[],coatPhoto){
      const age=t-(pet.begin??0);
      const response=reacting?(pet.kind==='feed'?.72+.26*Math.sin(age*12):.42*Math.sin(age*3.4)**2)*
        Math.min(1,age*3,(pet.until-t)*3):0;
-     pose(t,reacting?0:pet.pace,!viewer||Math.hypot(viewer.x-x,viewer.z-z)<8.6,response);
+     pose(t,reacting?0:pet.pace,!viewer||Math.hypot(viewer.x-x,viewer.z-z)<4.2,response);
      Object.assign(pet.action,{x,y:y+.4,z});
    }
    if(feeding){

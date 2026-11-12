@@ -18,6 +18,9 @@ for(const [key,vol] of Object.entries({bell:.81,moktak:.64,door:.41,water:.12}))
 audio.water.loop=true;
 let world,walk,renderer,scene,camera,water,smoke,animals,wake,monk,fish,lightCycle,skyDome;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
+let hallLights=[],hallLighting=false,doorShadowPending=false;
+const renderBudgets=[835000,620000,465000];
+let renderLevel=0,frameCount=0,frameTotal=0,fastWindows=0;
 let dragMove=null,dragLook=null,moveOrigin=[0,0],lookOrigin=[0,0],stick=[0,0];
 let active=null,lastActionText='',lastSite='',feedbackUntil=0,bellAt=-Infinity,incenseAt=-Infinity;
 const rotation=new T.Euler(0,0,0,'YXZ');
@@ -261,10 +264,22 @@ function resize(){
  if(!renderer)return;
  const w=canvas.clientWidth,h=canvas.clientHeight;
  if(!w||!h)return;
- const aspect=w/h,pixel=Math.min(devicePixelRatio,1.38,Math.sqrt(835000/(w*h)));
+ const aspect=w/h,pixel=Math.min(devicePixelRatio,1.38,Math.sqrt(renderBudgets[renderLevel]/(w*h)));
  if(camera.aspect===aspect&&canvas.width===Math.floor(w*pixel)&&canvas.height===Math.floor(h*pixel))return;
  renderer.setPixelRatio(pixel);renderer.setSize(w,h,false);
  camera.aspect=aspect;camera.updateProjectionMatrix();
+}
+function adaptResolution(interval){
+ if(interval>180)return;
+ frameTotal+=interval;
+ if(++frameCount<45)return;
+ const mean=frameTotal/frameCount;
+ frameCount=0;frameTotal=0;
+ if(mean>44&&renderLevel<renderBudgets.length-1){
+   renderLevel++;fastWindows=0;resize();
+ }else if(mean<35&&renderLevel>0){
+   if(++fastWindows>=6){renderLevel--;fastWindows=0;resize();}
+ }else fastWindows=0;
 }
 function update(now){
  request=0;
@@ -272,7 +287,9 @@ function update(now){
  request=requestAnimationFrame(update);
  // Rendering at up to 30 fps leaves GPU time for the real-time water mirrors.
  if(now-previous<31)return;
- const dt=clamp((now-previous)/1000,.001,.063);
+ const interval=now-previous;
+ adaptResolution(interval);
+ const dt=clamp(interval/1000,.001,.085);
  previous=now;
  const p=walk.player,oldX=p.x,oldZ=p.z;
  const wallTime=Date.now(),time=lightCycle(wallTime);
@@ -293,8 +310,19 @@ function update(now){
    p.yaw+=(Number(keys.has('arrowright'))-Number(keys.has('arrowleft')))*dt*1.6;
  }
  const doorMotion=walk.tick(dt);
- if(doorMotion&&Math.floor(now/83)%2===0)renderer.shadowMap.needsUpdate=true;
+ if(doorMotion)doorShadowPending=true;
+ else if(doorShadowPending){
+   renderer.shadowMap.needsUpdate=true;
+   doorShadowPending=false;
+ }
  const room=walk.room(),wet=walk.waterAt(p.x,p.z,p.feet),name=labelSite(p,room,wet);
+ const hallDistance=Math.max(Math.abs(p.x-sanctuary.x)-sanctuary.w/2,
+   Math.abs(p.z-sanctuary.z)-sanctuary.d/2);
+ const nearHall=hallDistance<(hallLighting?8:6);
+ if(nearHall!==hallLighting){
+   hallLighting=nearHall;
+   for(const light of hallLights)light.visible=nearHall;
+ }
  wake(dt,p.x,p.z,wet,Math.hypot(p.x-oldX,p.z-oldZ));
  $('jump').hidden=modalOpen();
  $('jump').dataset.airborne=String(!p.grounded);
@@ -336,6 +364,7 @@ function update(now){
 function loop(){
  if(!running||request)return;
  previous=performance.now();
+ frameCount=0;frameTotal=0;
  request=requestAnimationFrame(update);
 }
 function release(e){
@@ -466,6 +495,7 @@ function statue(gltf){
  const warmRim=new T.PointLight('#ffe0a1',12,8,1.61);
  warmRim.position.copy(base).add(new T.Vector3(-2.02,3.65,-1.38));
  scene.add(fill,warmRim);
+ for(const light of [key,fill,warmRim])light.userData.hallOnly=true;
 }
 
 async function boot(){
@@ -521,6 +551,8 @@ async function boot(){
  skyDome=sky();
  world=buildWorld(scene,maps,models);
  statue(buddha);
+ hallLights=scene.children.filter(object=>object.userData.hallOnly);
+ for(const light of hallLights)light.visible=false;
  plantForest(scene,world,maps,maple.scene);
  water=addWater(scene,maps,direction);
  wake=waterWake(scene);
