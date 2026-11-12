@@ -111,7 +111,19 @@ function batchInstances(scene,geometry,material,items,background=false,shadow=tr
  }
 }
 
-function batchMaple(scene,model,positions){
+// Texture-colored fill keeps shadowed leaf cards legible without another light or draw pass.
+function forestFill(material,level,leaf){
+ material.onBeforeCompile=shader=>{
+   shader.uniforms.forestFillLevel=level;
+   shader.uniforms.forestFillColor={value:new T.Vector3(...(leaf?[.69,.91,.79]:[.69,.75,.79]))};
+   shader.fragmentShader=shader.fragmentShader
+     .replace('#include <common>','#include <common>\nuniform float forestFillLevel;\nuniform vec3 forestFillColor;')
+     .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+       reflectedLight.indirectDiffuse += diffuseColor.rgb * forestFillColor * forestFillLevel;
+     `);
+ };
+}
+function batchMaple(scene,model,positions,leafFill,barkFill){
  model.updateMatrixWorld(true);
  const bounds=new T.Box3().setFromObject(model);
  const center=bounds.getCenter(v(0,0,0));
@@ -129,8 +141,10 @@ function batchMaple(scene,model,positions){
    const mesh=combine(geometries);
    mat.roughness=.82;
    mat.metalness=0;
-   if(mat.name.includes('foliage'))mat.side=T.DoubleSide;
-   batchInstances(scene,mesh,mat,positions,false,!mat.name.includes('foliage'));
+   const leaf=mat.name.includes('foliage');
+   if(leaf)mat.side=T.DoubleSide;
+   forestFill(mat,leaf?leafFill:barkFill,leaf);
+   batchInstances(scene,mesh,mat,positions,false,!leaf);
  }
 }
 
@@ -228,8 +242,10 @@ export function plantForest(scene,world,maps,maple){
    if(Math.hypot(xx,zz)>165||extra()>cover||Math.abs(xx-river(zz))<5.7)continue;
    distant[Math.floor(extra()*3)].push({x:xx,y,z:zz,scale:sample(extra,.51,1.36),angle:extra()*TAU});
  }
+ const leafFill={value:.30},barkFill={value:.19};
  const bark=new T.MeshLambertMaterial({map:maps.bark,color:'#c7ac90'});
- const needles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,color:'#b9c5a0'});
+ const needles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,color:'#c7d0ae'});
+ forestFill(bark,barkFill,false);forestFill(needles,leafFill,true);
  for(let i=0;i<3;i++){
    const model=pineModel(1472+i*131,i!==2);
    batchInstances(scene,model.bark,bark,pinePositions[i]);
@@ -238,15 +254,19 @@ export function plantForest(scene,world,maps,maple){
  const newTrees=woodlandPine(68022);
  batchInstances(scene,newTrees.trunk,bark,edge,false,false);
  batchInstances(scene,newTrees.crown,needles,edge,false,false);
- batchMaple(scene,maple,maples);
+ batchMaple(scene,maple,maples,leafFill,barkFill);
  const farBark=new T.MeshLambertMaterial({color:'#786d5a'});
  const farNeedles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,
-   side:T.DoubleSide,color:'#a9b797'});
+   side:T.DoubleSide,color:'#bdc9aa'});
+ forestFill(farBark,barkFill,false);forestFill(farNeedles,leafFill,true);
  const background=distant.flat();
  const distantPine=woodlandPine(23041,true);
  batchInstances(scene,distantPine.trunk,farBark,background,true);
  batchInstances(scene,distantPine.crown,farNeedles,background,true);
- return {pines:pinePositions.reduce((s,a)=>s+a.length,edge.length)+distant.reduce((n,a)=>n+a.length,0),maples:maples.length};
+ return {pines:pinePositions.reduce((s,a)=>s+a.length,edge.length)+distant.reduce((n,a)=>n+a.length,0),maples:maples.length,lighting(daylight){
+   leafFill.value=.16+.24*daylight;
+   barkFill.value=.075+.17*daylight;
+ }};
 }
 
 function coloredSurface(segmentsU,segmentsV,pointAt){
