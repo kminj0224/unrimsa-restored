@@ -24,37 +24,62 @@ export function solarState(now){
  const north=Math.cos(SEOUL_LAT)*Math.sin(decl)-Math.sin(SEOUL_LAT)*Math.cos(decl)*Math.cos(angle);
  const up=Math.sin(SEOUL_LAT)*Math.sin(decl)+Math.cos(SEOUL_LAT)*Math.cos(decl)*Math.cos(angle);
  const elevation=Math.asin(T.MathUtils.clamp(up,-1,1))/DEG;
- const daylight=T.MathUtils.smoothstep(elevation,-7,11);
- const night=1-T.MathUtils.smoothstep(elevation,-13,-3);
- const twilight=T.MathUtils.smoothstep(elevation,-13,-3)*(1-T.MathUtils.smoothstep(elevation,0,11));
- const period=elevation>9?'낮':elevation>-.8?(east>0?'아침':'저녁'):elevation>-13?(east>0?'새벽':'해질녘'):'밤';
- return {east,north,up,daylight,night,twilight,period,ms,elevation};
+ const hour=ms/3600000;
+ const {daylight,sun,ambient,environment,exposure,lamps,birds}=lightAt(hour);
+ const night=1-T.MathUtils.smoothstep(daylight,.045,.44);
+ const twilight=(1-T.MathUtils.smoothstep(daylight,.35,.75))*T.MathUtils.smoothstep(daylight,.015,.115);
+ const period=hour<4.5||hour>=20?'밤':hour<6.5?'새벽':hour<10.5?'아침':hour<16?'한낮':'저녁';
+ return {east,north,up,daylight,night,twilight,period,ms,elevation,hour,sun,ambient,environment,exposure,lamps,birds};
 }
 
-export function templeLighting(scene,renderer,sun,ambient,sky,waters,lanterns){
+// Sky, direct sun, ambient fill, reflected light, exposure, lamps, dawn chorus.
+const profiles=[
+ [0,.013,.016,.033,.027,.54,1,0],
+ [4.4,.013,.016,.033,.027,.54,1,0],
+ [5.25,.10,.044,.092,.061,.69,.92,.82],
+ [6.45,.30,.26,.26,.17,.88,.46,1],
+ [8.15,.68,.94,.56,.39,1.00,0,.04],
+ [11,.99,2.05,.94,.68,1.10,0,0],
+ [14.3,.99,2.05,.94,.68,1.10,0,0],
+ [16,.77,1.41,.71,.50,1.03,0,0],
+ [17.7,.42,.63,.37,.24,.89,.26,0],
+ [18.9,.13,.083,.11,.075,.68,.92,0],
+ [20.1,.013,.016,.033,.027,.54,1,0],
+ [24,.013,.016,.033,.027,.54,1,0]
+];
+
+function lightAt(hour){
+ const i=profiles.findIndex(p=>p[0]>hour);
+ const a=profiles[i-1],b=profiles[i];
+ const amount=T.MathUtils.smoothstep(hour,a[0],b[0]);
+ const [daylight,sun,ambient,environment,exposure,lamps,birds]=a.slice(1).map((n,j)=>T.MathUtils.lerp(n,b[j+1],amount));
+ return {daylight,sun,ambient,environment,exposure,lamps,birds};
+}
+
+export function templeLighting(scene,renderer,sun,ambient,sky,waters,hallLights){
  const direction=new T.Vector3(),lit=new T.Color(),fog=new T.Color();
- const dayFog=new T.Color('#a5b6ae'),nightFog=new T.Color('#18283f'),duskFog=new T.Color('#a1776d');
- const daySun=new T.Color('#ffedcb'),warmSun=new T.Color('#ffac70'),moon=new T.Color('#91b2e9');
- const daySky=new T.Color('#d6e6eb'),nightSky=new T.Color('#819dce');
- const dayGround=new T.Color('#74664e'),nightGround=new T.Color('#39364c');
- let last=-Infinity,lastShadow=-Infinity;
+ const dayFog=new T.Color('#a5aca6'),nightFog=new T.Color('#121b25'),duskFog=new T.Color('#81766b');
+ const daySun=new T.Color('#fff1de'),warmSun=new T.Color('#e9b58d'),moon=new T.Color('#9caec6');
+ const daySky=new T.Color('#dce3e6'),nightSky=new T.Color('#8795aa');
+ const dayGround=new T.Color('#726a59'),nightGround=new T.Color('#303037');
+ let last=-Infinity,lastShadow=-Infinity,state;
  return now=>{
-   const state=solarState(now);
-   if(Math.abs(now-last)<1600)return state;
+   if(Math.abs(now-last)<500)return state;
+   state=solarState(now);
    const {east,north,up,daylight,night,twilight}=state;
    direction.set(east,Math.max(.045,up),-north).normalize();
    sun.position.copy(direction).multiplyScalar(46);
-   sun.intensity=.14+2.04*daylight+.28*twilight;
-   sun.color.copy(lit.copy(moon).lerp(daySun,daylight).lerp(warmSun,twilight*.82));
-   ambient.intensity=.37+.82*daylight+.12*twilight;
+   sun.intensity=state.sun;
+   sun.color.copy(lit.copy(moon).lerp(daySun,daylight).lerp(warmSun,twilight*.61));
+   ambient.intensity=state.ambient;
    ambient.color.copy(nightSky).lerp(daySky,daylight);
    ambient.groundColor.copy(nightGround).lerp(dayGround,daylight);
-   scene.environmentIntensity=.30+.59*daylight+.12*twilight;
-   renderer.toneMappingExposure=.94+.25*daylight;
-   fog.copy(nightFog).lerp(dayFog,daylight).lerp(duskFog,twilight*.74);
+   scene.environmentIntensity=state.environment;
+   renderer.toneMappingExposure=state.exposure;
+   fog.copy(nightFog).lerp(dayFog,daylight).lerp(duskFog,twilight*.46);
    scene.background.copy(fog);
    scene.fog.color.copy(fog);
-   scene.fog.density=.0092+.0024*night;
+   scene.fog.density=.0095+.002*night;
    const uniforms=sky.material.uniforms;
    uniforms.sun.value.copy(direction);
    uniforms.daylight.value=daylight;
@@ -63,10 +88,10 @@ export function templeLighting(scene,renderer,sun,ambient,sky,waters,lanterns){
    for(const water of waters){
      const u=water.material.uniforms;
      u.sunDirection.value.copy(direction);
-     u.sunColor.value.copy(lit).multiplyScalar(.16+.84*daylight+.30*twilight);
-     u.waterColor.value.copy(water.userData.dayColor).multiplyScalar(.25+.75*daylight+.12*twilight);
+     u.sunColor.value.copy(lit).multiplyScalar(.032+.86*daylight);
+     u.waterColor.value.copy(water.userData.dayColor).multiplyScalar(.07+.86*daylight);
    }
-   for(const light of lanterns)light.intensity=(1-T.MathUtils.smoothstep(daylight,.18,.61))*light.userData.maximum;
+   for(const light of hallLights)light.intensity=light.userData.dayIntensity*(.16+.84*daylight);
    if(Math.abs(now-lastShadow)>=30000){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
    last=now;
    return state;

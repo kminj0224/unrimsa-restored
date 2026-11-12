@@ -1,16 +1,33 @@
 import * as T from './vendor/three.js';
 import {kstTime} from './temple-time.js';
+import {rooms} from './world.js';
 
 const SECOND=1000,HOUR=3600*SECOND;
 const v=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
 const smooth=T.MathUtils.smoothstep;
 const minMax=T.MathUtils.clamp;
-const ROUTE=[[-17.28,7.04],[-17.02,8.60],[-13.22,8.59],[-8.05,8.54],
- [-2.13,8.44],[3.35,8.42],[8.85,8.69],[10.50,8.90],[10.50,7.84]];
-const PATH=ROUTE.map(([x,z])=>v(x,0,z));
-const lengths=[0];
-for(let i=1;i<PATH.length;i++)lengths.push(lengths[i-1]+PATH[i-1].distanceTo(PATH[i]));
-const WALK_TIME=31*SECOND;
+const HOME=[-17.40,3.68],DOOR=[-17.40,5.30],LANDING=[-17.40,7.10],WEST=[-17.40,8.60];
+const BED=[-19.26,3.78];
+const OUT=[HOME,DOOR,LANDING,WEST];
+const BELL=[...OUT,[-13.22,8.59],[-8.05,8.54],[-2.13,8.44],[3.35,8.42],[8.85,8.69],[10.50,8.90],[10.50,7.84]];
+const SLEEP=[HOME,[-18.23,3.93],BED];
+const tours=[
+ {activity:'prayer',points:[...OUT,[-13.2,8.45],[-12.75,6.4],[-12.85,1.8],[-10.55,-1.8],[-7.3,-3.9],[-4.1,-6.1],[-4,-9.30],[-4,-10.6],[-5.25,-11.9]]},
+ {activity:'pond',points:[...OUT,[-17.7,9.45],[-16.3,10.84]]},
+ {activity:'stream',points:[...OUT,[-13.2,8.65],[-8.05,8.63],[-2.12,8.57],[4.6,8.58],[8.3,10.18],[12.9,10.3],[16.15,8.63],[19.6,8.16],[23.5,8.22],[25.25,9.10]]},
+ {activity:'tea',points:[HOME,[-16.42,3.80],[-16.14,3.48]]},
+ {activity:'walk',points:[...OUT,[-12.9,8.55],[-7.9,9.04],[-5.1,10.45],[-3.4,13.35],[-3.9,17.85],[-3.8,21.0]]},
+ {activity:'prayer',points:[...OUT,[-13.2,8.61],[-5.1,8.78],[2.8,7.46],[5.75,3.25],[8.7,-1.34],[12.45,-5.37],[12.45,-8.82],[12.45,-10.56],[12.45,-11.30]]},
+ {activity:'read',points:[HOME,[-17.37,3.12],[-17.36,2.58]]}
+];
+function route(points){
+ const path=points.map(([x,z])=>v(x,0,z)),lengths=[0];
+ for(let i=1;i<path.length;i++)lengths.push(lengths[i-1]+path[i-1].distanceTo(path[i]));
+ return {path,lengths,length:lengths.at(-1)};
+}
+const bellRoute=route(BELL),sleepRoute=route(SLEEP);
+for(const tour of tours)tour.route=route(tour.points);
+const WALK_TIME=37*SECOND;
 const PREPARE=3100;
 const REST=4200;
 
@@ -68,11 +85,61 @@ export function malletAngle(plan){
  return 0;
 }
 
-function routeAt(fraction,point,heading){
- const target=minMax(fraction,0,1)*lengths.at(-1);
+function routeAt({path,lengths,length},fraction,point,heading){
+ const target=minMax(fraction,0,1)*length;
  let i=1;while(i<lengths.length-1&&lengths[i]<target)i++;
- point.copy(PATH[i-1]).lerp(PATH[i],(target-lengths[i-1])/(lengths[i]-lengths[i-1]));
- heading.subVectors(PATH[i],PATH[i-1]).normalize();
+ point.copy(path[i-1]).lerp(path[i],(target-lengths[i-1])/(lengths[i]-lengths[i-1]));
+ heading.subVectors(path[i],path[i-1]).normalize();
+}
+
+export function monkLife(now,plan=bellPlan(now)){
+ const {day,ms}=kstTime(now);
+ const point=v(),heading=v();
+ let path=bellRoute,fraction=0,amount=0,activity='idle',sleep=0,reverse=false;
+ if(plan){
+   activity=plan.phase;
+   fraction=plan.phase==='approach'?(plan.elapsed+WALK_TIME+PREPARE)/WALK_TIME:
+     plan.phase==='return'?1-(plan.elapsed-plan.last-REST)/WALK_TIME:1;
+   amount=activity==='ring'?0:smooth(fraction,0,.026)*(1-smooth(fraction,.978,1));
+   reverse=activity==='return';
+ }else{
+   const sleepAt=20*HOUR,wake=4.52*HOUR,bridge=10500;
+   const ritualStart=3*HOUR-WALK_TIME-PREPARE,ritualEnd=3*HOUR+rituals[0].times.at(-1)+REST+WALK_TIME;
+   const night=ms< wake||ms>=sleepAt;
+   if(night){
+     path=sleepRoute;activity='sleep';
+     const from=ms>=sleepAt?sleepAt:ms>=ritualEnd?ritualEnd:0;
+     const until=ms<ritualStart?ritualStart:wake;
+     if(ms-from<bridge&&from>0){
+       const age=ms-from;
+       fraction=minMax(age/(bridge-2200),0,1);
+       sleep=smooth(age,bridge-2200,bridge);amount=fraction<1?1:0;
+     }else if(ms<until&&until-ms<bridge){
+       const remaining=until-ms;
+       fraction=minMax(remaining/(bridge-2200),0,1);
+       sleep=smooth(remaining,bridge-2200,bridge);amount=fraction<1?1:0;
+       reverse=true;
+     }else{fraction=1;sleep=1;}
+   }else{
+     const evening=18*HOUR-WALK_TIME-PREPARE,after=18*HOUR+rituals[1].times.at(-1)+REST+WALK_TIME;
+     const begin=ms<evening?wake:after,end=ms<evening?evening:sleepAt;
+     const duration=139000,index=Math.floor((ms-begin)/duration);
+     const seq=(Math.imul(day+19,1103515245)+Math.imul(index+51,1664525)+(begin===wake?0:1013904223))>>>0;
+     const tour=tours[((seq^(seq>>>17))>>>0)%tours.length];
+     const step=(ms-begin)%duration,oneWay=tour.route.length*950,stay=15500+(seq%11000);
+     const complete=2*oneWay+stay;
+     if(step<complete&&begin+index*duration+complete<=end){
+       path=tour.route;
+       if(step<oneWay){fraction=step/oneWay;amount=1;}
+       else if(step<oneWay+stay){fraction=1;activity=tour.activity;}
+       else{fraction=1-(step-oneWay-stay)/oneWay;amount=1;reverse=true;}
+       if(amount)amount=smooth(fraction,0,.055)*(1-smooth(fraction,.968,1));
+     }
+   }
+ }
+ routeAt(path,fraction,point,heading);
+ const yaw=sleep>.01?0:activity==='ring'?Math.PI:Math.atan2(heading.x,heading.z)+(reverse?Math.PI:0);
+ return {point,yaw,amount,activity,sleep,rhythm:(reverse?1-fraction:fraction)*path.length*8.1};
 }
 
 function weightedMesh(geometry,material,body,weights){
@@ -245,7 +312,7 @@ function reach(upper,lower,wrist,target,side){
  alignBone(lower,wrist,a.clone().addScaledVector(line,d));
 }
 
-export function addMonk(scene,model,maps,floorAt,mallet){
+export function addMonk(scene,model,maps,floorAt,mallet,holdDoor=()=>{}){
  const root=new T.Group();root.name='Temple monk';scene.add(root);
  root.add(model);model.updateMatrixWorld(true);
  const bone=garment(model,maps);
@@ -258,30 +325,38 @@ export function addMonk(scene,model,maps,floorAt,mallet){
      leg:boneDriver(bone('upperleg01'+id),[1,0,0]),knee:boneDriver(bone('lowerleg01'+id),[1,0,0]),
      foot:boneDriver(bone('foot'+id),[1,0,0])};
  });
- const point=v(),heading=v(),shadow=new T.Mesh(new T.CircleGeometry(.39,32).rotateX(-Math.PI/2),
+ const shadow=new T.Mesh(new T.CircleGeometry(.39,32).rotateX(-Math.PI/2),
    new T.MeshBasicMaterial({color:'#29251e',transparent:true,opacity:.23,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));
  shadow.position.y=.009;root.add(shadow);
  const schedule=bellSequence();
+ let previousFrame=-Infinity;
  function tick(now,frame,emit){
    const {plan,play}=schedule(now);
-   const walking=plan&&plan.phase!=='ring';
-   const phase=plan?.phase;
-   const move=phase==='approach'?(plan.elapsed+WALK_TIME+PREPARE)/WALK_TIME:
-     phase==='return'?1-(plan.elapsed-plan.last-REST)/WALK_TIME:phase==='ring'?1:0;
-   routeAt(move,point,heading);
-   const rhythm=walking?((phase==='return'?1-move:move)*lengths.at(-1))*8.1:0;
-   const amount=walking?smooth(move,0,.055)*(1-smooth(move,.965,1)):0;
-   root.position.set(point.x,floorAt(point.x,point.z),point.z);
-   root.rotation.y=plan?(phase==='ring'?Math.PI:Math.atan2(heading.x,heading.z)+(phase==='return'?Math.PI:0)):1.0;
-   model.position.y=amount*.024*Math.abs(Math.sin(rhythm));
+   const {point,yaw,rhythm,amount,activity,sleep}=monkLife(now,plan);
+   const resting=activity==='ring',prayer=activity==='prayer',reading=activity==='read'||activity==='tea';
+   const ground=floorAt(point.x,point.z);
+   const dt=(frame-previousFrame)*.001;
+   const immediate=dt>1||Math.hypot(point.x-root.position.x,point.z-root.position.z)>2;
+   root.position.set(point.x,immediate?ground:T.MathUtils.lerp(root.position.y,ground,Math.min(1,dt*17)),point.z);
+   const change=Math.atan2(Math.sin(yaw-root.rotation.y),Math.cos(yaw-root.rotation.y));
+   root.rotation.y=immediate||sleep>.09?yaw:root.rotation.y+change*Math.min(1,dt*7);
+   previousFrame=frame;
+   root.userData.activity=activity;
+   model.position.y=sleep*(.23+.003*Math.sin(frame*.0022))+amount*.024*Math.abs(Math.sin(rhythm));
+   model.rotation.x=-sleep*Math.PI/2;
+   shadow.visible=sleep<.55;
    torso(.037*Math.sin(rhythm)*amount);
-   head((phase==='ring'?.055:0)+.031*Math.sin(frame*.0019));
-   const resting=phase==='ring';
+   head((resting?.055:prayer?.17:reading?.22:0)+.031*Math.sin(frame*.0019)*(1-sleep));
+   for(const room of rooms){
+     const close=Math.abs(point.x-room.x)<1.2&&Math.abs(point.z-(room.z+room.d/2))<1.20;
+     holdDoor(room.id,amount>0&&close);
+   }
    for(const limb of arms){
      limb.upper.quaternion.copy(limb.upperRest);
      limb.lower.quaternion.copy(limb.lowerRest);
      limb.down(-limb.s*.62);
-     limb.forward(.10+amount*Math.sin(rhythm+limb.s*1.57)*.14);
+     limb.forward(.10+amount*Math.sin(rhythm+limb.s*1.57)*.14+
+       (prayer?.55:reading?.30:sleep*.10));
      const stride=Math.sin(rhythm+limb.s*1.57);
      limb.leg(stride*.28*amount);
      limb.knee(Math.max(0,-stride)*.40*amount);

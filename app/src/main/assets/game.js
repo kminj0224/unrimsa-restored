@@ -8,15 +8,19 @@ import {addAnimals} from './animals.js';
 import {templeLighting} from './temple-time.js';
 import {addMonk,bellPlan,malletAngle} from './monk.js';
 import {aquaticLife} from './fish.js';
+import {nightLanterns} from './lanterns.js';
+import {streamLife} from './stream-life.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('map');
 const direction=new T.Vector3(-.51,.74,.43).normalize();
 const keys=new Set();
-const audio=Object.fromEntries(['bell','moktak','door','water'].map(n=>[n,new Audio('./'+n+'.ogg')]));
+const audio=Object.fromEntries(['bell','moktak','door','water','dawn-birds'].map(n=>[n,new Audio('./'+n+'.ogg')]));
 for(const [key,vol] of Object.entries({bell:.81,moktak:.64,door:.41,water:.12}))audio[key].volume=vol;
 audio.water.loop=true;
-let world,walk,renderer,scene,camera,water,smoke,animals,wake,monk,fish,lightCycle,skyDome;
+const dawnBirds=audio['dawn-birds'];
+dawnBirds.loop=true;dawnBirds.volume=0;
+let world,walk,renderer,scene,camera,water,smoke,animals,wake,monk,fish,lightCycle,skyDome,lanternCycle,stream;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
 let hallLights=[],hallLighting=false,doorShadowPending=false;
 const renderBudgets=[835000,620000,465000];
@@ -100,6 +104,7 @@ function ambient(){
  if(muted||audioStarted)return;
  audioStarted=true;
  audio.water.play().catch(()=>{audioStarted=false;});
+ dawnBirds.play().catch(()=>{});
 }
 function report(text){
  $('status').textContent=text;$('status').hidden=false;
@@ -234,7 +239,7 @@ function sky(){
      void main(){
        vec3 d=normalize(dome);
        float y=max(0.,d.y);
-       vec3 dayColor=mix(vec3(.59,.66,.65),vec3(.19,.35,.49),pow(y,.71));
+       vec3 dayColor=mix(vec3(.59,.62,.62),vec3(.25,.35,.44),pow(y,.71));
        vec3 darkColor=mix(vec3(.022,.035,.066),vec3(.006,.011,.029),pow(y,.44));
        vec2 p=d.xz/(y+.31)*4.8;
        float cloud=noise(p)*.61+noise(p*2.1)*.27+noise(p*4.3)*.12;
@@ -242,7 +247,7 @@ function sky(){
        float cover=smoothstep(.52,.79,cloud)*.48*smoothstep(.02,.17,y);
        dayColor=mix(dayColor,vec3(.82,.84,.80),cover);
        vec3 light=mix(darkColor,dayColor,daylight);
-       light+=vec3(.45,.164,.074)*pow(glow,3.)*pow(1.-y,3.)*twilight;
+       light+=vec3(.35,.182,.119)*pow(glow,3.)*pow(1.-y,3.)*twilight;
        light+=(vec3(.28,.20,.105)*pow(glow,8.)+vec3(1.2,.84,.40)*smoothstep(.9989,.9998,glow))*daylight;
        vec2 starGrid=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)))*156.;
        vec2 cell=floor(starGrid),spot=vec2(hash(cell+vec2(12.6,28.)),hash(cell+vec2(3.2,17.)));
@@ -339,6 +344,9 @@ function update(now){
  if(audioStarted){
    const d=Math.abs(p.x-river(p.z)),vol=(wet===null?.04+.42*Math.exp(-d*.105):.43)*(room ? .26 : 1);
    if(Math.abs(audio.water.volume-vol)>.007)audio.water.volume=vol;
+   const birds=time.birds*(room?.070:.30);
+   if(Math.abs(dawnBirds.volume-birds)>.003)dawnBirds.volume=birds;
+
  }
  const ritual=bellPlan(wallTime),bellTime=(now-bellAt)*.001;
  world.mallet.rotation.x=ritual?.phase==='ring'?malletAngle(ritual):
@@ -356,6 +364,8 @@ function update(now){
  const t=now*.001;
  for(const surface of water.waters)surface.material.uniforms.time.value=t;
  fish(dt,p);
+ stream(dt,p,time.daylight);
+ lanternCycle(now,p,time.lamps);
  camera.position.set(p.x,p.y+1.66,p.z);
  skyDome.position.copy(camera.position);
  rotation.set(p.pitch,-p.yaw,0,'YXZ');camera.quaternion.setFromEuler(rotation);
@@ -454,7 +464,7 @@ $('sound').onclick=()=>{
  $('sound').setAttribute('aria-pressed',String(muted));
  for(const clip of [...Object.values(audio),...bellVoices])clip.muted=muted;
  if(bellMaster)bellMaster.gain.value=Number(!muted);
- if(muted){audio.water.pause();audioStarted=false;}else ambient();
+ if(muted){audio.water.pause();dawnBirds.pause();audioStarted=false;}else ambient();
 };
 
 function loadTexture(loader,key,path,isColor){
@@ -525,7 +535,7 @@ async function boot(){
  const [items,buddha,maple,...animalsAndProps]=await Promise.all([
    Promise.all(paths.map(([key,path,flag])=>loadTexture(textures,key,'./'+path,flag))),
    gltf.loadAsync('./buddha.glb'),gltf.loadAsync('./maple.glb'),
-   ...['cat','jindo','sparrow','teapot','monk-rig'].map(name=>gltf.loadAsync('./'+name+'.glb').then(asset=>[name,asset.scene]))
+   ...['cat','jindo','sparrow','teapot','monk-rig','mallard','stream-frog'].map(name=>gltf.loadAsync('./'+name+'.glb').then(asset=>[name,asset.scene]))
  ]);
  const maps=Object.fromEntries(items),models=Object.fromEntries(animalsAndProps);
  const sun=new T.DirectionalLight('#ffdfb3',2.26);
@@ -537,13 +547,6 @@ async function boot(){
  sun.shadow.normalBias=.032;sun.shadow.bias=-.0001;
  const ambientLight=new T.HemisphereLight('#d6e4e4','#69594d',1.16);
  scene.add(sun,ambientLight);
- const lanterns=[[-9,2.23,12],[1,2.22,4],[-9,2.22,-6],[10.47,3.15,6.88],[-17.38,3.04,5.96]].map(([x,y,z],i)=>{
-   const light=new T.PointLight('#ffc185',0,i===3?7.6:5.0,2);
-   light.position.set(x,y,z);
-   light.userData.maximum=i===3?11:6.3;
-   scene.add(light);
-   return light;
- });
  const environment=new RoomEnvironment(renderer);
  const pmrem=new T.PMREMGenerator(renderer);
  scene.environment=pmrem.fromScene(environment,.15,.1,100).texture;
@@ -552,7 +555,8 @@ async function boot(){
  world=buildWorld(scene,maps,models);
  statue(buddha);
  hallLights=scene.children.filter(object=>object.userData.hallOnly);
- for(const light of hallLights)light.visible=false;
+ for(const light of hallLights){light.userData.dayIntensity=light.intensity;light.visible=false;}
+ lanternCycle=nightLanterns(scene,world.eaveLamps,world.lanternPaper);
  plantForest(scene,world,maps,maple.scene);
  water=addWater(scene,maps,direction);
  wake=waterWake(scene);
@@ -560,8 +564,9 @@ async function boot(){
  walk=walking(world);
  animals=addAnimals(scene,walk.floorAt,models,maps.fur,world.actions,maps.jindoCoat);
  fish=aquaticLife(scene,maps.carpScales);
- monk=addMonk(scene,models['monk-rig'],maps,walk.floorAt,world.mallet);
- lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,lanterns);
+ stream=streamLife(scene,models);
+ monk=addMonk(scene,models['monk-rig'],maps,walk.floorAt,world.mallet,walk.holdDoor);
+ lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,hallLights);
  lightCycle(Date.now());
  try{$('guide').hidden=localStorage.getItem('unrimsa-seen')==='1';}catch{$('guide').hidden=false;}
  $('loading').hidden=true;

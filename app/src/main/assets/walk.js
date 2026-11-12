@@ -1,4 +1,4 @@
-import {clamp,pond,pondBed,pondRadius,river,riverHalfWidth,riverY,rooms,spawn,terrainAt} from './world.js';
+import {clamp,pond,pondBed,pondRadius,river,riverHalfWidth,riverY,rooms,spawn,terrainAt,yardContains,yardLevel} from './world.js';
 
 const radius=.255;
 const bodyHeight=1.72;
@@ -11,7 +11,7 @@ function hits(x,z,cx,cz,w,d){
 }
 
 export function walking(world){
- const states=new Map(rooms.map(r=>[r.id,{open:false,position:0}]));
+ const states=new Map(rooms.map(r=>[r.id,{open:false,held:false,position:0}]));
  const cells=new Map();
  const player={...spawn,floor:.66,y:.66,feet:.66,vertical:0,grounded:true};
  const key=(x,z)=>Math.floor(x/4)+','+Math.floor(z/4);
@@ -27,7 +27,7 @@ export function walking(world){
  }
  function groundAt(x,z){
    const radius=pondRadius(x,z);
-   let top=radius<1?pondBed(radius):terrainAt(x,z);
+   let top=radius<1?pondBed(radius):yardContains(x,z)?yardLevel:terrainAt(x,z);
    for(const [cx,cz,w,d,y] of world.floors){
      if(radius<1&&y<=1.11)continue;
      if(Math.abs(x-cx)<=w/2&&Math.abs(z-cz)<=d/2)top=Math.max(top,y);
@@ -135,13 +135,14 @@ export function walking(world){
    state.open=!state.open;
    return true;
  }
+ function holdDoor(id,held){states.get(id).held=held;}
  function tick(dt){
    if(!player.grounded)integrateJump(dt);
    const dy=player.feet-player.y;
    player.y=Math.abs(dy)<.003?player.feet:player.y+dy*clamp(dt*(player.grounded?16:26),0,1);
    let moved=false;
    for(const state of states.values()){
-     const target=Number(state.open);
+     const target=Number(state.open||state.held);
      if(state.position===target)continue;
      state.position+=Math.sign(target-state.position)*Math.min(Math.abs(target-state.position),dt*2.6);
      if(Math.abs(target-state.position)<.001)state.position=target;
@@ -155,9 +156,9 @@ export function walking(world){
    player.floor=floorAt(player.x,player.z);
    player.y=player.feet=player.floor;
    player.vertical=0;player.grounded=true;
-   for(const s of states.values()){s.open=false;s.position=0;}
+   for(const s of states.values()){s.open=false;s.held=false;s.position=0;}
    for(const d of world.doors)d.mesh.position.x=0;
  }
  reset();
- return {player,states,floorAt,waterAt,blocked,move,jump,room,action,toggleDoor,tick,reset};
+ return {player,states,floorAt,waterAt,blocked,move,jump,room,action,toggleDoor,holdDoor,tick,reset};
 }

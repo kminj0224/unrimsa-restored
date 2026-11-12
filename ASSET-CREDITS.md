@@ -13,3 +13,6 @@
 | 대웅전 봉안 참고 | [국가유산청 · 직지사 대웅전 삼존불탱화](https://www.heritage.go.kr/heri/cul/culGuidePostDetail.do?ccbaCpno=1123706700000&ccgbGbtype=IND&ccgbGbtypeNo=1&pageNo=1_5_0_0) | 불단과 후불탱의 배치 참고 |
 | 필사본 | [The Metropolitan Museum of Art · Illustrated manuscript of the Lotus Sutra, Volume 2](https://www.metmuseum.org/art/collection/search/36451) · Public Domain | 두 면을 골라 요사채의 절첩본과 확대 보기로 구현 |
 | 잉어 비늘 | [Kaitlin Kovacs / USGS · Common carp, Cyprinus carpio](https://www.usgs.gov/media/images/common-carp-cyprinus-carpio) · Public Domain | 사진의 비늘 부분을 가공해 직접 제작한 잉어 몸체에 적용 |
+| 청둥오리 | [Innerscene · Duck mallard](https://www.innerscene.com/tools/library/3d-parts/duck-mallard-dadfaf72) · CC0 | 모바일용 메시 및 질감 경량화, 개울 수영 동작 |
+| 개울 개구리 | [Innerscene · Tree frog on a leaf](https://www.innerscene.com/tools/library/3d-parts/tree-frog-on-a-leaf-b4f5b793) · CC0 | 잎 제거, 올리브색으로 재가공한 가상의 개울 개구리, 짧은 도약 동작 |
+| 새벽 새소리 | [SamsterBirdies · Bird ambience. Coniferous forest dawn chorus](https://freesound.org/people/SamsterBirdies/sounds/745273/) · CC0 | 48초 구간 편집, 음량 페이드, Ogg 변환 |

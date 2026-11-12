@@ -116,10 +116,10 @@ export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
    box(x+sign*3.15,ceiling-.303,z,.20,.027,d-.59,teal);
  }
 
- const petalColors=['#b84745','#d2b991'].map((color,i)=>new T.MeshStandardMaterial({
-   color,emissive:i?'#d1914c':'#ba4030',emissiveIntensity:i?.39:.37,map:maps.paper,roughness:.89
+ const petalColors=['#a4564f','#d2b991'].map((color,i)=>new T.MeshStandardMaterial({
+   color,emissive:i?'#d1914c':'#a34a36',emissiveIntensity:i?.39:.37,map:maps.paper,roughness:.89
  }));
- const leaf=new T.MeshStandardMaterial({color:'#477247',emissive:'#253d1c',emissiveIntensity:.20,roughness:.9});
+ const leaf=new T.MeshStandardMaterial({color:'#5b7051',emissive:'#253d1c',emissiveIntensity:.20,roughness:.9});
  const paperTag=new T.MeshStandardMaterial({color:'#ddc89a',map:maps.paper,roughness:.91,side:T.DoubleSide});
  const petal=new T.SphereGeometry(1,11,8);
  function lotusLantern(lx,ly,lz,top,variant,angle){

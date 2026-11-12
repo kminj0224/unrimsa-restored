@@ -1,7 +1,7 @@
 import * as T from './vendor/three.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {Water} from './vendor/Water.js';
-import {clamp,court,mix,pond,random,river,riverHalfWidth,riverY,terrainAt} from './world.js';
+import {clamp,court,mix,pond,random,river,riverHalfWidth,riverY,terrainAt,yardContains,yardLevel} from './world.js';
 
 const TAU=Math.PI*2;
 const down=new T.Vector3(0,1,0);
@@ -179,8 +179,8 @@ export function plantForest(scene,world,maps,maple){
  const rng=random(81205);
  const pinePositions=[[],[],[]],maples=[],trees=[];
  const place=(x,z,s,kind,near=false)=>{
-   const inYard=x>court.left&&x<court.right&&z>court.north&&z<court.south;
-   const y=inYard?1.11:terrainAt(x,z);
+   const inYard=yardContains(x,z);
+   const y=inYard?yardLevel:terrainAt(x,z);
    const item={x,y,z,scale:s,angle:rng()*TAU};
    if(kind==='maple')maples.push(item);
    else pinePositions[near?(rng()<.5?0:1):2].push(item);
@@ -230,7 +230,7 @@ export function plantForest(scene,world,maps,maple){
    distant[Math.floor(extra()*3)].push({x:xx,y,z:zz,scale:sample(extra,.51,1.36),angle:extra()*TAU});
  }
  const bark=new T.MeshStandardMaterial({map:maps.bark,bumpMap:maps.bark,bumpScale:.067,roughness:.90,color:'#c7ac90'});
- const needles=new T.MeshStandardMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,roughness:.88,color:'#c5d69a'});
+ const needles=new T.MeshStandardMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,roughness:.88,color:'#b9c5a0'});
  for(let i=0;i<3;i++){
    const model=pineModel(1472+i*131,i!==2);
    batchInstances(scene,model.bark,bark,pinePositions[i]);
@@ -242,7 +242,7 @@ export function plantForest(scene,world,maps,maple){
  batchMaple(scene,maple,maples);
  const farBark=new T.MeshLambertMaterial({color:'#786d5a'});
  const farNeedles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,
-   side:T.DoubleSide,color:'#b0c38c'});
+   side:T.DoubleSide,color:'#a9b797'});
  const background=distant.flat();
  const distantPine=woodlandPine(23041,true);
  batchInstances(scene,distantPine.trunk,farBark,background,true);
@@ -378,8 +378,8 @@ export function addWater(scene,maps,lightDirection){
  const waters=[];
  const lakeShape=new T.CircleGeometry(1,88).scale(pond.rx,pond.rz,1);
  const entries=[
-   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#2e5c43',width:320,height:224,scale:1.5,rate:.46,near:23},
-   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#4b7f69',width:320,height:192,scale:1.02,rate:.78,near:31}
+   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#3a5649',width:320,height:224,scale:1.5,rate:.46,near:23},
+   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#506c64',width:320,height:192,scale:1.02,rate:.78,near:31}
  ];
  for(const data of entries){
    const water=new Water(data.shape,{textureWidth:data.width,textureHeight:data.height,clipBias:.0018,

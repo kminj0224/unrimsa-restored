@@ -117,7 +117,7 @@ export function aquaticLife(scene,scales){
    item.group.name='Koi '+(i+1);
    item.group.scale.setScalar([.53,.46,.60][i]);population.add(item.group);return item;
  });
- const streamFish=Array.from({length:8},(_,i)=>{
+ const streamFish=Array.from({length:12},(_,i)=>{
    const item=fishForm(3,scales);
    item.group.name='Stream carp '+(i+1);
    item.group.scale.setScalar(.27+(i%4)*.043);population.add(item.group);return item;
@@ -137,15 +137,16 @@ export function aquaticLife(scene,scales){
    }
    for(const [i,item] of streamFish.entries()){
      const phase=t*(.205+(i%3)*.029)+i*.77;
-     const z=12.1+(i%4)*5.6-8.4+Math.cos(phase)*(2.85+i%3);
+     const reach=5.2+(i%6)*4.05+Math.floor(i/6)*.63;
+     const z=reach+Math.cos(phase)*(2.85+i%3);
      const x=river(z)+Math.sin(phase+i*.63)*riverHalfWidth(z)*.48;
      item.group.position.set(x,Math.min(riverY-.14,Math.max(terrainAt(x,z)+.15,riverY-.44+.15*Math.sin(t*.63+i))),z);
-     const nextZ=12.1+(i%4)*5.6-8.4+Math.cos(phase+.02)*(2.85+i%3);
+     const nextZ=reach+Math.cos(phase+.02)*(2.85+i%3);
      const nextX=river(nextZ)+Math.sin(phase+i*.63+.02)*riverHalfWidth(nextZ)*.48;
      item.group.rotation.y=Math.atan2(nextX-x,nextZ-z);
      const visible=!viewer||Math.hypot(viewer.x-x,viewer.z-z)<23;
      item.group.visible=visible;
-     if(visible)item.swim(t,i*1.81);
+     if(visible&&(!viewer||Math.hypot(viewer.x-x,viewer.z-z)<13))item.swim(t,i*1.81);
    }
  };
 }

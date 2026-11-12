@@ -10,6 +10,21 @@ export const rooms=[
  {id:'east',name:'선방',x:12.45,z:-12.5,w:5.4,d:4.7,h:2.70,floor:1.95}
 ];
 export const court={left:-23.58,right:17.32,north:-28.70,south:19.57};
+const yardOutline=[[-4.9,20.16],[1.9,20.18],[6.2,19.2],[12.8,17.2],[15.6,13.0],
+ [17.32,9.55],[17.32,6.65],[15.85,2.3],[17.5,-3.2],[17.3,-16.9],
+ [13.5,-20.5],[9.5,-24.4],[3.5,-26.5],[-7.1,-28.1],[-15.4,-27.2],
+ [-19.5,-24.2],[-21.3,-18.2],[-22.4,-10.5],[-22.5,-3.5],[-23.58,3.7],
+ [-22.9,9.9],[-22.05,15.7],[-19.2,18.6],[-12.35,19.5],[-8.25,20.18]];
+export const yardLevel=1.11;
+export function yardContains(x,z){
+ if(x<-23.6||x>17.6||z<-28.2||z>20.2)return false;
+ let inside=false;
+ for(let i=0,j=yardOutline.length-1;i<yardOutline.length;j=i++){
+   const [a,b]=yardOutline[i],[c,d]=yardOutline[j];
+   if((b>z)!==(d>z)&&x<(c-a)*(z-b)/(d-b)+a)inside=!inside;
+ }
+ return inside;
+}
 export const pond={x:-16,z:14.7,rx:4.25,rz:2.77,y:1.09};
 export const riverY=-.63;
 export const pondRadius=(x,z)=>Math.hypot((x-pond.x)/pond.rx,(z-pond.z)/pond.rz);
@@ -45,7 +60,7 @@ export function terrainAt(x,z){
 function terrain(){
  const ps=[],ns=[],uv=[],colors=[],indices=[];
  const s=162,n=s+1;
- const grass=new T.Color('#78885b'),soil=new T.Color('#a69570'),pine=new T.Color('#546c4c'),tmp=new T.Color();
+ const grass=new T.Color('#7d806d'),soil=new T.Color('#9d9077'),pine=new T.Color('#5c6757'),tmp=new T.Color();
  for(let j=0;j<n;j++) for(let i=0;i<n;i++){
    const x=(i-s/2)*2,z=(j-s/2)*2,y=height(x,z);
    ps.push(x,y,z);
@@ -124,14 +139,14 @@ export function buildWorld(scene,maps,models={}){
  const floors=[],solids=[],actions=[],doors=[],batches=new Map();
  const stone=new T.MeshStandardMaterial({color:'#bcb4a3',map:maps.stone,bumpMap:maps.stone,bumpScale:.044,roughness:.92});
  const stones=['#8d8a77','#a8a08c','#a59c88','#bbb39d','#9f9c8b'].map(c=>new T.MeshStandardMaterial({color:c,map:maps.stone,bumpMap:maps.stone,bumpScale:.065,roughness:.97}));
- const wood=new T.MeshStandardMaterial({color:'#9a704e',map:maps.wood,bumpMap:maps.wood,bumpScale:.028,roughness:.78});
- const red=new T.MeshStandardMaterial({color:'#9c5141',map:maps.wood,bumpMap:maps.wood,bumpScale:.023,roughness:.74});
- const teal=new T.MeshStandardMaterial({color:'#507f6a',map:maps.wood,bumpMap:maps.wood,bumpScale:.024,roughness:.78});
- const tan=new T.MeshStandardMaterial({color:'#a6834f',map:maps.wood,roughness:.72});
+ const wood=new T.MeshStandardMaterial({color:'#8a735f',map:maps.wood,bumpMap:maps.wood,bumpScale:.028,roughness:.78});
+ const red=new T.MeshStandardMaterial({color:'#895849',map:maps.wood,bumpMap:maps.wood,bumpScale:.023,roughness:.74});
+ const teal=new T.MeshStandardMaterial({color:'#587164',map:maps.wood,bumpMap:maps.wood,bumpScale:.024,roughness:.78});
+ const tan=new T.MeshStandardMaterial({color:'#9a805c',map:maps.wood,roughness:.72});
  const dark=new T.MeshStandardMaterial({color:'#49352b',map:maps.wood,roughness:.81});
  const paper=new T.MeshStandardMaterial({color:'#e1c99e',map:maps.paper,bumpMap:maps.paper,bumpScale:.012,roughness:.84});
  const slate=new T.MeshStandardMaterial({vertexColors:true,map:maps.clay,bumpMap:maps.clay,bumpScale:.08,roughness:.91,side:T.DoubleSide});
- const ridge=new T.MeshStandardMaterial({color:'#656662',map:maps.clay,roughness:.86,bumpMap:maps.clay,bumpScale:.052});
+ const ridge=new T.MeshStandardMaterial({color:'#5c5d59',map:maps.clay,roughness:.86,bumpMap:maps.clay,bumpScale:.052});
  const bronze=new T.MeshStandardMaterial({color:'#957d51',map:maps.clay,bumpMap:maps.clay,bumpScale:.073,metalness:.63,roughness:.48});
  const brass=new T.MeshStandardMaterial({color:'#c3a56b',metalness:.65,roughness:.43});
  const hemp=new T.MeshStandardMaterial({color:'#b5a17b',map:maps.paper,bumpMap:maps.paper,bumpScale:.029,roughness:1});
@@ -251,31 +266,46 @@ export function buildWorld(scene,maps,models={}){
  const turf=new T.Mesh(terrain(),new T.MeshStandardMaterial({vertexColors:true,map:maps.earth,roughness:.98,bumpMap:maps.earth,bumpScale:.13}));
  turf.receiveShadow=true;scene.add(turf);
  const {left,right,north,south}=court;
- const cx=(left+right)/2,cz=(north+south)/2;
- const cw=right-left,cd=south-north;
- box(cx,.55,cz,cw,.18,cd,stones[1]);
  const yard=new T.Shape();
- yard.moveTo(left,-south);yard.lineTo(right,-south);yard.lineTo(right,-north);yard.lineTo(left,-north);yard.closePath();
+ for(const [i,[x,z]] of yardOutline.entries())i===0?yard.moveTo(x,-z):yard.lineTo(x,-z);
+ yard.closePath();
  const hole=new T.Path();
  hole.absellipse(pond.x,-pond.z,pond.rx,pond.rz,0,TAU,true);
  yard.holes.push(hole);
- const paving=new T.ShapeGeometry(yard,64).rotateX(-Math.PI/2).translate(0,1.11,0);
+ const soil=new T.MeshStandardMaterial({color:'#a69a81',map:maps.earth,bumpMap:maps.earth,bumpScale:.046,roughness:.98});
+ const paving=new T.ShapeGeometry(yard,44).rotateX(-Math.PI/2).translate(0,yardLevel,0);
  const texCoords=paving.getAttribute('uv');
- for(let i=0;i<texCoords.count;i++)texCoords.setXY(i,texCoords.getX(i)/3.2,texCoords.getY(i)/3.2);
- add(paving,stones[1]);
- floor(cx,cz,cw,cd,1.11);
- for(const edge of [left,right])box(edge,.73,cz,.20,.38,cd,stones[1]);
- for(const zz of [north,south])for(let i=0;i<Math.floor(cw/.85);i++){
-   box(left+.42+i*.85,.73,zz,.82,.38,.24,stones[i%stones.length],(rand()-.5)*.041);
+ for(let i=0;i<texCoords.count;i++)texCoords.setXY(i,texCoords.getX(i)/3.8,texCoords.getY(i)/3.8);
+ add(paving,soil);
+ const outline=new T.ExtrudeGeometry(yard,{depth:.48,bevelEnabled:false,curveSegments:40})
+   .rotateX(-Math.PI/2).translate(0,yardLevel-.481,0);
+ add(outline,soil);
+ const landscape=random(91173);
+ for(const [i,[x,z]] of yardOutline.entries()){
+   const [xx,zz]=yardOutline[(i+1)%yardOutline.length],length=Math.hypot(xx-x,zz-z);
+   for(let j=0;j<length/.69;j++){
+     const f=(j+.31)*.69/length,lx=mix(x,xx,f),lz=mix(z,zz,f);
+     if((lz>18.4&&lx>-7.5&&lx<0)||(lx>15&&Math.abs(lz-8.15)<1.3)||landscape()<.25)continue;
+     const size=.23+landscape()*.32;
+     add(transform(rockGeometry,lx,.83+landscape()*.10,lz,size,.16+landscape()*.18,size*.79,landscape()*TAU),stones[(i+j)%stones.length]);
+   }
  }
  stairs(-4,21.65,5.4,.66,5,.52,.095);
- for(let iz=0;iz<44;iz++){
-   const z=19-iz*.93;
-   for(let ix=-14;ix<=14;ix++){
-     if(Math.abs(ix)>3 && !(z>=-12&&z<10))continue;
-     const x=-4+ix*.93+(iz%2)*.16;
-     box(x,1.108,z,.898,.027+rand()*.01,.895,stones[(rand()*stones.length)|0],(rand()-.5)*.032);
+ // Sparse, staggered flagstones leave the central earth courtyard open.
+ for(let i=0;i<38;i++){
+   const z=19.55-i*.68,x=-3.3+3.35*Math.sin(i*.095);
+   for(const row of [-1,0,1]){
+     if(row!==0&&landscape()<.23)continue;
+     const px=x+row*.78+(landscape()-.5)*.26;
+     if(Math.hypot(px+5.8,z-4.3)<2.48)continue;
+     box(px,1.107,z+(landscape()-.5)*.23,.56+landscape()*.29,.04,.47+landscape()*.24,
+       stones[i%stones.length],(landscape()-.5)*.56);
    }
+ }
+ for(let i=0;i<35;i++){
+   const x=-18+i*.96,z=8.55+.46*Math.sin(i*.27);
+   if(!yardContains(x,z)||Math.abs(x+2.9)<1.8||landscape()<.17)continue;
+   box(x,1.106,z,.66+landscape()*.23,.042,.49+landscape()*.24,stones[(i+2)%stones.length],(landscape()-.5)*.36);
  }
  for(let i=0;i<16;i++){
    const z=22.6+i*1.28,x=-4+5*Math.sin(i*.104);
@@ -575,8 +605,40 @@ export function buildWorld(scene,maps,models={}){
  solid(bx,6.76,.33,1.31);
  use('bell','범종 울리기',bx,2.86,6.68,2.48);
 
+ section='eave-lanterns';
+ const lanternPaper=new T.MeshStandardMaterial({color:'#b6a181',map:maps.paper,
+   roughness:.95,emissive:'#ffb767',emissiveMap:maps.paper,emissiveIntensity:0});
+ const eaveLamps=[];
+ function eaveLantern(x,y,z,ceiling,size=.89){
+   const w=.38*size,h=.52*size;
+   pipe([x,y+h,z],[x,ceiling,z],.015,.013,dark,undefined,6);
+   box(x,y,z,w,h,w,lanternPaper);
+   box(x,y-.036,z,w+.11,.045,w+.11,wood);
+   box(x,y+h-.008,z,w+.16,.055,w+.16,dark);
+   for(const sign of [-1,1])for(const depth of [-1,1]){
+     box(x+sign*w*.496,y,z+depth*w*.496,.028,h,.028,dark);
+   }
+   for(const side of [-1,1]){
+     box(x,y+h*.43,z+side*w*.507,w,.017,.024,dark);
+     box(x+side*w*.507,y+h*.43,z,.024,.017,w,dark);
+   }
+   round(x,y+h+.048,z,[[.067,0],[.060,.047],[.023,.10]],brass,undefined,8);
+   eaveLamps.push(new T.Vector3(x,y+h*.47,z));
+ }
+ for(const {id,x,z,d,h,floor} of rooms){
+   const main=id==='main',offsets=main?[-8.3,-5.4,5.4,8.3]:[-1.95,1.95];
+   for(const dx of offsets)eaveLantern(x+dx,floor+h-(main?1.46:1.06),z+d/2+.74,floor+h+.04,main?1.14:.88);
+ }
+ for(const x of [9.18,11.82])eaveLantern(x,3.54,8.10,4.77,.85);
+ eaveLantern(-4.98,2.81,19.45,3.84,.82);
+ pipe([-5.53,1.11,19.45],[-5.53,3.84,19.45],.088,.073,dark);
+ pipe([-5.53,3.84,19.45],[-4.98,3.84,19.45],.040,.040,wood);
+ eaveLantern(16.06,2.31,8.77,3.30,.78);
+ pipe([16.59,1.11,8.77],[16.59,3.30,8.77],.080,.065,dark);
+ pipe([16.59,3.30,8.77],[16.06,3.30,8.77],.037,.037,wood);
+
  section='pagoda';
- const tx=-4,tz=-2.4;
+ const tx=-5.8,tz=4.3;
  platform(tx,tz,4.29,4.29,1.13,.35);
  for(const [size,y,h] of [[3.18,1.60,.32],[2.73,1.92,.49],[2.79,2.41,.15]])box(tx,y,tz,size,h,size,stones[2]);
  for(let i=0;i<3;i++){
@@ -595,13 +657,6 @@ export function buildWorld(scene,maps,models={}){
    round(x,2.375,z,[[.29,0],[.27,.068],[.13,.18],[0,.23]],stones[2],undefined,8);
    solid(x,z,.83,.83);
  }
- for(let i=0;i<42;i++){
-   const x=left+.48+i*.97;
-   box(x,1.11,north+.22,.95,1.32,.47,stones[i%stones.length],(rand()-.5)*.06);
-   box(x,2.43,north+.22,.99,.14,.66,ridge);
- }
- solid(cx,north+.22,cw,.58);
-
  section='stream-approach';
  for(let i=0;i<4;i++){
    const x=right+.22+i*.40,z=8.15,top=1.112-i*.113;
@@ -685,5 +740,5 @@ export function buildWorld(scene,maps,models={}){
    const mesh=shadowMesh(merged,m);scene.add(mesh);
    for(const geometry of g)geometry.dispose();
  }
- return {floors,solids,actions,doors,flames,incense,lamps,smokeOrigin,mallet,statueBase};
+ return {floors,solids,actions,doors,flames,incense,lamps,smokeOrigin,mallet,statueBase,eaveLamps,lanternPaper};
 }
