@@ -1,4 +1,4 @@
-import {clamp,pond,river,rooms,spawn,terrainAt} from './world.js';
+import {clamp,pond,pondBed,pondRadius,river,riverHalfWidth,riverY,rooms,spawn,terrainAt} from './world.js';
 
 const radius=.255;
 const bodyHeight=1.72;
@@ -26,9 +26,17 @@ export function walking(world){
    }
  }
  function groundAt(x,z){
-   let top=terrainAt(x,z);
-   for(const [cx,cz,w,d,y] of world.floors)if(Math.abs(x-cx)<=w/2&&Math.abs(z-cz)<=d/2)top=Math.max(top,y);
+   const radius=pondRadius(x,z);
+   let top=radius<1?pondBed(radius):terrainAt(x,z);
+   for(const [cx,cz,w,d,y] of world.floors){
+     if(radius<1&&y<=1.11)continue;
+     if(Math.abs(x-cx)<=w/2&&Math.abs(z-cz)<=d/2)top=Math.max(top,y);
+   }
    return top;
+ }
+ function waterAt(x,z,feet){
+   const surface=pondRadius(x,z)<1?pond.y:Math.abs(x-river(z))<riverHalfWidth(z)?riverY:-Infinity;
+   return feet<surface-.025?surface:null;
  }
  function floorAt(x,z,limit=Infinity){
    let top=groundAt(x,z);
@@ -39,8 +47,6 @@ export function walking(world){
  }
  function blocked(x,z,feet=player.feet){
    if(x<-53||x>53||z<-50||z>51)return true;
-   if(Math.abs(x-river(z))<4.20&&terrainAt(x,z)<-.52)return true;
-   if(((x-pond.x)/pond.rx)**2+((z-pond.z)/pond.rz)**2<1&&Math.abs(x-pond.x-.32)>.447)return true;
    for(const c of cells.get(key(x,z))||[]){
      if(c.top!==undefined&&feet>=c.top-.012)continue;
      const offset=c.door?states.get(c.door.room).position*c.door.shift:0;
@@ -153,5 +159,5 @@ export function walking(world){
    for(const d of world.doors)d.mesh.position.x=0;
  }
  reset();
- return {player,states,floorAt,blocked,move,jump,room,action,toggleDoor,tick,reset};
+ return {player,states,floorAt,waterAt,blocked,move,jump,room,action,toggleDoor,tick,reset};
 }

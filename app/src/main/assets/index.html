@@ -39,7 +39,7 @@ button:focus-visible{outline:2px solid #f4ce94;outline-offset:3px}
 #loading .card{width:auto;min-width:230px;text-align:center}
 #credits{font-size:10px;color:#dccba6}
 </style>
-<script type="module" src="/game.js"></script>
+<script type="module" src="./game.js"></script>
 </head>
 <body>
 <canvas id="map" aria-label="운림사 1인칭 산책"></canvas>
@@ -49,7 +49,7 @@ button:focus-visible{outline:2px solid #f4ce94;outline-offset:3px}
 <div id="stick"><b id="knob"></b><span>이동</span></div>
 <button id="jump" type="button" aria-label="점프" hidden>↑ 점프</button>
 <button id="action" type="button" hidden></button>
-<section id="guide" class="cover" hidden><div class="card"><h2>운림사 둘러보기</h2><ul><li>왼쪽 화면을 누르고 밀어 걷습니다.</li><li>오른쪽 화면을 끌어 시선을 움직입니다.</li><li>오른쪽의 점프 버튼을 누르면서 앞으로 밀면 낮은 턱을 넘을 수 있습니다.</li><li>문이나 물건을 가까이 보면 행동 버튼이 나타납니다.</li></ul><p id="credits">불상 스캔 · Minneapolis Institute of Art (금박 색으로 재가공)<br>소나무 질감 · Poly Haven / 단풍나무 · Innerscene (CC0)</p><div class="row"><button id="reset" class="secondary" type="button">산길로 돌아가기</button><button id="resume" class="primary" type="button">걷기 시작</button></div></div></section>
+<section id="guide" class="cover" hidden><div class="card"><h2>운림사 둘러보기</h2><ul><li>왼쪽 화면을 누르고 밀어 걷습니다.</li><li>오른쪽 화면을 끌어 시선을 움직입니다.</li><li>오른쪽의 점프 버튼을 누르면서 앞으로 밀면 낮은 턱을 넘을 수 있습니다.</li><li>문이나 물건을 가까이 보면 행동 버튼이 나타납니다.</li></ul><p id="credits">불상 스캔 · Minneapolis Institute of Art (금박 색으로 재가공)<br>소나무·직물 질감 · Poly Haven<br>단풍나무·참새·찻주전자 · Innerscene / 고양이 · Grab3D (CC0)</p><div class="row"><button id="reset" class="secondary" type="button">산길로 돌아가기</button><button id="resume" class="primary" type="button">걷기 시작</button></div></div></section>
 <section id="book" class="cover" hidden><div class="card"><h2>요사채의 필사본</h2><p>산문을 나서면 옷깃에 솔 향이 들고,<br>돌다리 건너 물결에는 저녁빛이 머문다.<br>한 번 울린 종은 골짜기마다 여운을 남긴다.</p><div class="row"><button id="bookClose" class="primary" type="button">필사본 덮기</button></div></div></section>
 <div id="loading" class="cover" role="status"><div class="card"><h1>운림사</h1><p id="loadText">산사를 불러오는 중</p></div></div>
 </body>

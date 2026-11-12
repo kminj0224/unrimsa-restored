@@ -2,292 +2,298 @@ import * as T from './vendor/three.js';
 
 const TAU=Math.PI*2;
 const UP=new T.Vector3(0,1,0);
-const surface=(color,roughness=.84)=>new T.MeshStandardMaterial({color,roughness});
-const eyes=surface('#18100d',.24);
-const nose=surface('#27201b',.43);
-const whisker=surface('#b9a997',.75);
-const sphere=new T.SphereGeometry(1,18,12);
-const shaft=new T.CylinderGeometry(1,1,1,8);
-const shadowGeo=new T.CircleGeometry(1,32).rotateX(-Math.PI/2);
-const coat=new T.MeshStandardMaterial({vertexColors:true,roughness:.94});
-const pigment=new Map();
-function color(value){
- if(!pigment.has(value))pigment.set(value,new T.Color(value));
- return pigment.get(value);
+const shaft=new T.CylinderGeometry(1,1,1,9);
+const shadow=new T.CircleGeometry(1,32).rotateX(-Math.PI/2);
+const furTone=new T.Color('#e9dcca');
+
+function contacts(parent,w,d,opacity){
+ for(let i=0;i<4;i++){
+   const material=new T.MeshBasicMaterial({
+     color:'#28231d',transparent:true,depthWrite:false,opacity:opacity*(1+i*.19),
+     polygonOffset:true,polygonOffsetFactor:-1
+   });
+   const mesh=new T.Mesh(shadow,material);
+   mesh.position.y=.009+i*.001;
+   mesh.scale.set(w*(1-i*.17),1,d*(1-i*.17));
+   parent.add(mesh);
+ }
 }
-function mesh(parent,geometry,material){
- const object=new T.Mesh(geometry,material);parent.add(object);object.receiveShadow=true;return object;
+function makeRoot(scene,name){
+ const root=new T.Group();root.name=name;scene.add(root);return root;
 }
-function oval(parent,material,x,y,z,sx,sy,sz){
- const object=mesh(parent,sphere,material);
- object.position.set(x,y,z);object.scale.set(sx,sy,sz);return object;
+function finishModel(model){
+ model.traverse(object=>{
+   if(!object.isMesh)return;
+   object.receiveShadow=true;
+ });
 }
-function line(parent,material,r=.012){
- const part=mesh(parent,shaft,material);
- const direction=new T.Vector3();
- return (a,b)=>{
-   direction.subVectors(b,a);
-   const length=direction.length();
-   part.position.copy(a).lerp(b,.5);
-   part.quaternion.setFromUnitVectors(UP,direction.divideScalar(Math.max(length,.0001)));
-   part.scale.set(r,length,r);
+function weight(x,y,z,dog){
+ const leg=1-T.MathUtils.smoothstep(y,dog?.09:.054,dog?.455:.229);
+ const side=x>(dog?0:-.023);
+ const front=z>0;
+ return {leg,diagonal:side===front?1:-1};
+}
+function gait(mesh,dog){
+ const geometry=mesh.geometry;
+ const positions=geometry.getAttribute('position');
+ const count=positions.count;
+ const stride=new Float32Array(count*3),leftLift=new Float32Array(count*3),rightLift=new Float32Array(count*3);
+ for(let i=0;i<count;i++){
+   const {leg,diagonal}=weight(positions.getX(i),positions.getY(i),positions.getZ(i),dog);
+   stride[i*3+2]=leg*diagonal*(dog?.112:.068);
+   (diagonal===1?leftLift:rightLift)[i*3+1]=leg*(dog?.092:.061);
+ }
+ geometry.morphTargetsRelative=true;
+ geometry.morphAttributes.position=[stride,leftLift,rightLift].map(data=>new T.BufferAttribute(data,3));
+ mesh.updateMorphTargets();
+ return (phase,pace)=>{
+   const wave=Math.sin(phase),lift=Math.cos(phase);
+   mesh.morphTargetInfluences[0]=wave*pace;
+   mesh.morphTargetInfluences[1]=Math.max(0,lift)*pace;
+   mesh.morphTargetInfluences[2]=Math.max(0,-lift)*pace;
  };
 }
-const v=(x,y,z)=>new T.Vector3(x,y,z);
-function tuft(parent,sections,dye,sides=24){
- // Closed elliptical cross sections perpendicular to the spine.
- const positions=[],indices=[],colors=[];
- for(let j=0;j<sections.length;j++){
-   const [z,y,rx,ry]=sections[j];
-   for(let i=0;i<sides;i++){
-     const theta=TAU*i/sides, s=Math.sin(theta),c=Math.cos(theta);
-     positions.push(rx*c,y+ry*s,z);
-     const grain=1+.035*Math.sin(i*31+j*67)+.026*Math.cos(i*17-j*49);
-     const shade=dye(rx*c,s,z,j).clone().multiplyScalar(grain);
-     colors.push(shade.r,shade.g,shade.b);
-     if(j){
-       const a=(j-1)*sides+i,b=(j-1)*sides+(i+1)%sides,c=j*sides+i,d=j*sides+(i+1)%sides;
-       indices.push(a,b,c,b,d,c);
-     }
-   }
+function catModel(parent,source){
+ const root=makeRoot(parent,'Tabby cat');
+ const body=source.clone(true);
+ const skin=body.getObjectByName('cat');
+ skin.geometry=skin.geometry.clone().rotateY(.78);
+ const step=gait(skin,false);
+ root.add(body);
+ finishModel(body);
+ contacts(root,.16,.26,.068);
+ return {root,pose(t,pace){
+   const phase=t*9.2;
+   step(phase,pace);
+   body.position.y=.004*Math.sin(t*2.5)+.008*pace*Math.abs(Math.cos(phase));
+   body.rotation.z=.025*Math.sin(phase)*pace;
+   body.scale.y=1+.015*Math.sin(t*2.2);
+ }};
+}
+function guardHair(material,texture){
+ material.color.copy(furTone);
+ material.roughness=.89;
+ material.onBeforeCompile=shader=>{
+   shader.uniforms.coatMap={value:texture};
+   shader.vertexShader=shader.vertexShader
+     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;')
+     .replace('#include <begin_vertex>','#include <begin_vertex>\nfurPosition = position;');
+   shader.fragmentShader=shader.fragmentShader
+     .replace('#include <common>','#include <common>\nvarying vec3 furPosition;\nuniform sampler2D coatMap;')
+     .replace('#include <color_fragment>',`#include <color_fragment>
+       vec3 p=furPosition;
+       vec3 coatNormal=normalize(cross(dFdx(p),dFdy(p)));
+       float u=p.x*1840.0+p.y*120.0+sin(p.z*50.0)*.85;
+       float v=p.z*1550.0-p.y*245.0+sin(p.x*37.0)*1.3;
+       float f1=sin(u+sin(p.z*120.0)*1.5);
+       float f2=sin(v+sin(p.x*145.0)*1.4);
+       float detail=mix(f1,f2,smoothstep(.2,.7,abs(coatNormal.x)));
+       float fade=1.0-smoothstep(.65,5.0,max(fwidth(u),fwidth(v)));
+       float lowerBand=sin(p.z*230.0+p.x*190.0+sin(p.y*95.0)*2.0);
+       vec3 blend=pow(abs(coatNormal)+.001,vec3(4.0));
+       blend/=dot(blend,vec3(1.0));
+       vec3 strandX=texture2D(coatMap,vec2(p.z*3.6,p.y*2.9-p.z*.7)).rgb;
+       vec3 strandY=texture2D(coatMap,vec2(p.x*3.6,p.z*2.9)).rgb;
+       vec3 strandZ=texture2D(coatMap,vec2(p.x*3.6,p.y*2.9)).rgb;
+       vec3 albedo=strandX*blend.x+strandY*blend.y+strandZ*blend.z;
+       float fine=dot(albedo,vec3(.24,.65,.11));
+       diffuseColor.rgb*=(.64+.70*fine)*(1.0+fade*.061*detail+lowerBand*.016);
+     `);
+ };
+ return material;
+}
+function coatStrands(skin,count,tail=false){
+ const vertices=skin.geometry.getAttribute('position'),normals=skin.geometry.getAttribute('normal');
+ const positions=[],colors=[];
+ const p=new T.Vector3(),n=new T.Vector3(),tangent=new T.Vector3(),cross=new T.Vector3();
+ let seed=1913;
+ const rand=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
+ for(let i=0;i<count;i++){
+   const index=Math.floor(rand()*vertices.count);
+   p.fromBufferAttribute(vertices,index);
+   n.fromBufferAttribute(normals,index);
+   if(!tail&&(p.y<.095||(p.z>.50&&p.y>.72)))continue;
+   const long=tail?.013+rand()*.015:.005+rand()*.015*(p.y>.43?1:.46);
+   tangent.set(0,-.69,-.72).addScaledVector(n,-(n.y*-.69+n.z*-.72));
+   tangent.normalize();
+   cross.crossVectors(tangent,n).normalize().multiplyScalar(long*.074);
+   const base=p.clone().addScaledVector(n,.0007);
+   const tip=base.clone().addScaledVector(tangent,long).addScaledVector(n,long*(tail?.41:.28));
+   positions.push(...base.clone().sub(cross).toArray(),...base.add(cross).toArray(),...tip.toArray());
+   const gray=.72+rand()*.19;
+   colors.push(gray,gray*.92,gray*.78,gray,gray*.92,gray*.78,gray*1.1,gray*1.03,gray*.89);
  }
  const geo=new T.BufferGeometry();
  geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
- geo.setIndex(indices);geo.computeVertexNormals();
- return mesh(parent,geo,coat);
+ geo.computeVertexNormals();
+ const material=new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.91});
+ const coat=new T.Mesh(geo,material);coat.receiveShadow=true;
+ skin.add(coat);
+ return coat;
 }
-function furOval(parent,y,z,rx,ry,rz,dye){
- const object=tuft(parent,Array.from({length:15},(_,i)=>{
-   const a=Math.PI*i/14;
-   return [z-rz*Math.cos(a),y,Math.max(.0003,rx*Math.sin(a)),Math.max(.0003,ry*Math.sin(a))];
- }),dye);
- return object;
-}
-function ear(head,side,dog,outer,inner){
+function dogModel(parent,source,texture){
+ const root=makeRoot(parent,'Jindo');
+ const body=source.clone(true);
+ const skin=body.getObjectByName('JindoBody');
+ skin.geometry=skin.geometry.clone();
+ const step=gait(skin,true);
+ const tail=body.getObjectByName('JindoTail');
  const pivot=new T.Group();
- pivot.position.set(side*(dog?.112:.077),dog?.070:.062,dog?-.06:-.040);
- pivot.rotation.z=-side*.15;head.add(pivot);
- const earShape=new T.Shape();
- const w=dog?.092:.057,h=dog?.204:.119;
- earShape.moveTo(-w,0);
- earShape.quadraticCurveTo(-w*.79,h*.63,side*w*.18,h);
- earShape.quadraticCurveTo(w*.92,h*.62,w,0);
- earShape.quadraticCurveTo(0,-.026,-w,0);
- const shell=mesh(pivot,new T.ExtrudeGeometry(earShape,{depth:.023,bevelEnabled:true,bevelThickness:.010,bevelSize:.010,bevelSegments:2,curveSegments:8,steps:1}),outer);
- shell.rotation.x=-.09;
- const inset=mesh(pivot,new T.ShapeGeometry(earShape,10),inner);
- inset.scale.set(.73,.76,1);inset.position.set(0,.014,.035);inset.rotation.x=-.09;
- return pivot;
-}
-function curvedTail(parent,dog,material){
- const points=dog
-   ?[[0,0,0],[0,.14,-.10],[.016,.32,-.15],[.05,.44,-.09],[.065,.45,.03],[.049,.37,.096],[.02,.29,.075]]
-   :[[0,0,0],[0,.05,-.14],[.013,.135,-.27],[.027,.24,-.37],[.035,.33,-.41],[.038,.38,-.40]];
- const curve=new T.CatmullRomCurve3(points.map(p=>v(...p)));
- const geometry=new T.TubeGeometry(curve,24,dog?.081:.032,12,false);
- const positions=geometry.getAttribute('position');
- for(let j=0;j<=24;j++){
-   const t=j/24,center=curve.getPointAt(t);
-   const scale=(dog?.73+.55*Math.sin(Math.PI*t):1.05-.32*t)*Math.min(1,(1-t)*6+.10);
-   for(let i=0;i<=12;i++){
-     const n=j*13+i;
-     positions.setXYZ(n,center.x+(positions.getX(n)-center.x)*scale,
-       center.y+(positions.getY(n)-center.y)*scale,center.z+(positions.getZ(n)-center.z)*scale);
-   }
- }
- geometry.computeVertexNormals();
- return mesh(parent,geometry,material);
-}
-function contact(parent,x,z,w,d,opacity){
- const material=new T.MeshBasicMaterial({color:'#322519',transparent:true,depthWrite:false,opacity,polygonOffset:true,polygonOffsetFactor:-1});
- for(let j=0;j<3;j++){
-   const o=mesh(parent,shadowGeo,material);
-   o.position.set(x,.005+j*.0005,z);o.scale.set(w*(1-j*.19),1,d*(1-j*.19));
- }
-}
-function quadruped(parent,dog){
- const animal=new T.Group();animal.name=dog?'Jindo':'Tabby cat';parent.add(animal);
- const body=new T.Group();animal.add(body);
- contact(animal,0,0,dog?.28:.16,dog?.56:.34,.075);
- const buff=dog?'#dfcdb0':'#997c56',pale=dog?'#f3e7cc':'#d7c6a4';
- const dark=dog?'#a48764':'#45342a';
- const dye=(x,s,z,j)=>{
-   if(s<-.39)return color(pale);
-   if(!dog&&Math.sin(j*2.46+x*24+s*4)>.43)return color(dark);
-   return color(buff).clone().lerp(color(dark),Math.max(0,s)*.38);
- };
- const fur=surface(buff),light=surface(pale),shaded=surface(dark);
- const size=dog?1:.59;
- body.scale.setScalar(size);
- tuft(body,[[-.48,.54,.001,.001],[-.43,.54,.10,.105],[-.34,.57,.158,.177],[-.24,.575,.158,.187],
-   [-.13,.59,.135,.155],[-.01,.60,.134,.174],[.12,.61,.159,.194],[.23,.61,.179,.211],
-   [.32,.62,.141,.182],[.40,.64,.085,.114],[.43,.65,.001,.001]],dye);
- furOval(body,.68,.287,.136,.226,.153,dye);
- const tail=new T.Group();tail.position.set(0,.656,-.427);body.add(tail);
- curvedTail(tail,dog,dog?light:shaded);
- const head=new T.Group();
- head.position.set(0,dog?.844:.793,dog?.352:.364);body.add(head);
- furOval(head,0,.034,dog?.145:.126,dog?.138:.119,dog?.147:.119,dye);
- const muzzle=dog?.243:.161;
- furOval(head,-.052,muzzle-.065,dog?.093:.089,.066,dog?.117:.074,(x,s)=>s<-.18?color(pale):color(buff));
- oval(head,shaded,0,-.087,muzzle-.030,dog?.071:.065,.014,.060);
- oval(head,nose,0,-.035,muzzle+.042,dog?.050:.029,dog?.030:.019,.029);
- const eyelids=[],ears=[];
- for(const side of [-1,1]){
-   const eye=new T.Group();head.add(eye);
-   eye.position.set(side*(dog?.094:.083),.016,dog?.132:.117);
-   eye.rotation.y=side*.57;
-   oval(eye,shaded,0,0,0,.048,.028,.020);
-   const lid=new T.Group();eye.add(lid);eyelids.push(lid);
-   oval(lid,eyes,0,0,.011,.039,.022,.016);
-   oval(lid,surface(dog?'#65472a':'#aca052',.34),0,0,.023,.020,.019,.009);
-   oval(lid,eyes,0,0,.030,dog?.012:.006,.016,.006);
-   oval(lid,light,-.009,.010,.034,.005,.004,.003);
-   ears.push(ear(head,side,dog,fur,surface(dog?'#9b7665':'#a87e73')));
-   oval(head,light,side*.049,-.070,muzzle+.006,.046,.035,.051);
-   if(!dog)for(let j=0;j<4;j++){
-     line(head,whisker,.0015)(v(side*.067,-.063+j*.010,muzzle+.015),v(side*(.155+j*.009),-.081+j*.024,muzzle+.054-j*.011));
-   }
- }
- const limbs=[];
- for(const side of [-1,1])for(const front of [true,false]){
-   const xx=side*(front?.119:.127),zz=front?.233:-.312;
-   const upper=oval(body,front?fur:shaded,0,0,0,1,1,1);
-   const lower=oval(body,light,0,0,0,1,1,1);
-   const paw=oval(body,light,xx,.036,zz+.041,front?.059:.061,.041,.095);
-   const hip=v(xx,front?.58:.55,zz);
-   const knee=v(xx,.275,zz+(front?-.021:.106));
-   const ankle=v(xx,.058,zz+.018);
-   const segment=(object,a,b,width,depth)=>{
-     const along=v(0,0,0).subVectors(b,a);
-     object.position.copy(a).lerp(b,.5);
-     object.scale.set(width,along.length()*.60,depth);
-     object.quaternion.setFromUnitVectors(UP,along.normalize());
-   };
-   limbs.push((phase,move)=>{
-     const s=Math.sin(phase+(side===1?Math.PI:0)+(front?0:Math.PI));
-     const swing=Math.cos(phase+(side===1?Math.PI:0)+(front?0:Math.PI));
-     ankle.z=zz+.018+s*.19*move;
-     ankle.y=.054+Math.max(0,swing)*.112*move;
-     knee.z=zz+(front?-.021:.106)+s*.091*move;
-     knee.y=.273+Math.max(0,swing)*.054*move;
-     segment(upper,hip,knee,front?.074:.100,front?.083:.119);
-     segment(lower,knee,ankle,front?.043:.049,front?.053:.060);
-     paw.position.set(xx,ankle.y-.018,ankle.z+.041);
-   });
- }
+ pivot.position.set(0,.624,-.423);
+ body.add(pivot);
+ pivot.attach(tail);
+ const coat=guardHair(skin.material.clone(),texture);
+ skin.material=coat;
+ tail.material=coat;
+ const strands=coatStrands(skin,9200),tailStrands=coatStrands(tail,2300,true);
+ const moveStrands=gait(strands,true);
+ const claws=[];
+ body.traverse(o=>{
+   if(o.name.startsWith('Claw'))claws.push([o,o.position.clone()]);
+ });
+ finishModel(body);
+ body.scale.setScalar(.87);
+ root.add(body);
+ contacts(root,.25,.50,.070);
  const collar=new T.Group();
- if(dog){
-   collar.position.set(0,.724,.301);
-   collar.rotation.x=.18;body.add(collar);
-   const strap=mesh(collar,new T.TorusGeometry(.137,.017,9,32),surface('#785b3b',.88));
-   strap.scale.y=1.22;
-   oval(collar,surface('#98896a',.40),.115,.062,-.019,.024,.024,.024);
- }
- return {
-   animal,collar,
-   pose(t,moving,look=0){
-     const phase=t*(dog?9:13);
-     body.position.y=.006*Math.sin(t*4)+.015*moving*Math.abs(Math.sin(phase));
-     head.rotation.x=look+.042*Math.sin(t*2.31)-.045*moving;
-     head.rotation.y=.14*Math.sin(t*.92);
-     tail.rotation.y=(dog?.33:.24)*Math.sin(t*(dog?4:2.7));
-     tail.rotation.x=.10*Math.sin(t*2.1);
-     for(const [i,pivot] of ears.entries())pivot.rotation.y=.09*Math.sin(t*2.2+i*2);
-     const blink=Math.abs(Math.sin(t*.53+.3));
-     for(const lid of eyelids)lid.scale.y=blink<.035?.14:1;
-     for(const pose of limbs)pose(phase,moving);
+ collar.position.set(0,.719,.369);
+ collar.rotation.x=.42;
+ const leather=new T.MeshStandardMaterial({color:'#574030',roughness:.8});
+ const brass=new T.MeshStandardMaterial({color:'#ab9870',roughness:.42,metalness:.64});
+ const band=new T.Mesh(new T.TorusGeometry(.134,.017,10,42),leather);
+ band.scale.y=1.17;collar.add(band);
+ const metalRing=new T.Mesh(new T.TorusGeometry(.023,.004,8,18),brass);
+ metalRing.position.set(.111,.083,-.025);metalRing.rotation.y=.5;collar.add(metalRing);
+ body.add(collar);
+ return {root,ring:metalRing,pose(t,pace,near){
+   const phase=t*7.2;
+   step(phase,pace);
+   strands.visible=tailStrands.visible=near;
+   if(near)moveStrands(phase,pace);
+   for(const [n,base] of claws){
+     const {leg,diagonal}=weight(base.x,base.y,base.z,true);
+     n.position.set(base.x,base.y+Math.max(0,Math.cos(phase)*diagonal)*leg*.092*pace,
+       base.z+Math.sin(phase)*leg*.112*pace*diagonal);
    }
+   body.position.y=.005*Math.sin(t*3)+Math.abs(Math.cos(phase))*.011*pace;
+   body.rotation.z=Math.sin(phase)*.016*pace;
+   pivot.rotation.y=.24*Math.sin(t*4.5);
+   pivot.rotation.x=.066*Math.sin(t*3.4);
+ }};
+}
+function sparrowPlumage(material){
+ material.onBeforeCompile=shader=>{
+   shader.vertexShader=shader.vertexShader
+     .replace('#include <common>','#include <common>\nvarying vec3 plumagePosition;')
+     .replace('#include <begin_vertex>','#include <begin_vertex>\nplumagePosition=position;');
+   shader.fragmentShader=shader.fragmentShader
+     .replace('#include <common>','#include <common>\nvarying vec3 plumagePosition;')
+     .replace('#include <color_fragment>',`#include <color_fragment>
+       vec3 p=plumagePosition;
+       float head=smoothstep(.012,.032,p.x);
+       float crown=head*smoothstep(.067,.080,p.y);
+       float cheeks=head*smoothstep(.008,.015,abs(p.z))*smoothstep(.051,.059,p.y)*(1.0-smoothstep(.071,.078,p.y));
+       vec3 spot=(vec3(p.x,p.y,abs(p.z))-vec3(.035,.063,.018))/vec3(.0059,.0052,.013);
+       float patch=(1.0-smoothstep(.72,1.25,length(spot)))*cheeks;
+       vec3 warm=vec3(.251,.103,.047);
+       diffuseColor.rgb=mix(diffuseColor.rgb,warm,crown*.84);
+       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.61,.53,.42),cheeks*.90);
+       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.043,.030,.022),patch*.94);
+       float fibers=sin(p.x*4060.0+p.y*1680.0+sin(p.z*1170.0)*1.2);
+       float row=sin(p.y*1650.0+p.z*2200.0+sin(p.x*690.0)*1.1);
+       float fade=1.0-smoothstep(.05,.78,max(fwidth(fibers),fwidth(row)));
+       diffuseColor.rgb*=1.0+(.075*fibers+.055*row)*fade;
+     `);
  };
 }
-
-function bird(parent,x,y,z,seed){
- const root=new T.Group();root.name='Tree sparrow';root.position.set(x,y,z);parent.add(root);
- const torso=new T.Group();root.add(torso);
- const warm=surface('#8d7862'),crown=surface('#604534'),brown=surface('#665545');
- const cream=surface('#b8ab90'),black=surface('#352c23'),beak=surface('#a67b54');
- oval(torso,warm,0,.122,0,.067,.077,.121);
- oval(torso,cream,0,.102,.054,.058,.057,.063);
- const head=new T.Group();head.position.set(0,.176,.071);torso.add(head);
- oval(head,crown,0,0,0,.055,.054,.061);
- for(const side of [-1,1]){
-   oval(head,cream,side*.043,-.008,.016,.014,.028,.029);
-   oval(head,black,side*.049,-.015,.008,.010,.012,.013);
-   oval(head,eyes,side*.044,.008,.025,.013,.011,.013);
- }
- const bill=mesh(head,new T.ConeGeometry(.019,.046,9),beak);
- bill.rotation.x=Math.PI/2;bill.position.set(0,-.008,.075);bill.scale.z=.78;
- const tail=new T.Group();torso.add(tail);tail.position.set(0,.119,-.075);
- tail.rotation.x=-.21;
- for(let j=-2;j<=2;j++)oval(tail,brown,j*.011,0,-.071,.014,.007,.075).rotation.y=j*.07;
+function birdModel(parent,source,x,y,z,seed){
+ const root=makeRoot(parent,'Tree sparrow');
+ const body=source.clone(true);
+ body.rotation.y=-Math.PI/2;
+ body.scale.setScalar(1.22);
+ root.add(body);finishModel(body);
+ body.traverse(object=>{
+   if(object.isMesh&&object.material.name.startsWith('Authored sparrow coat'))sparrowPlumage(object.material);
+ });
  const wings=[];
- for(const side of [-1,1]){
-   const wing=new T.Group();torso.add(wing);
-   wing.position.set(side*.051,.135,.018);wings.push(wing);
-   oval(wing,warm,side*.061,0,-.023,.078,.018,.075);
-   for(let j=0;j<7;j++){
-     const feather=oval(wing,j%3===0?crown:brown,side*(.076+j*.012),-.004,-.028-j*.005,.014,.009,.072-j*.005);
-     feather.rotation.y=-side*(.29+j*.066);
-   }
-   oval(wing,cream,side*.058,.011,-.026,.046,.008,.016).rotation.y=-side*.22;
-   const foot=v(side*.027,.012,.017);
-   line(torso,beak,.0055)(v(side*.030,.081,-.006),foot);
-   for(let j=-1;j<=1;j++)line(torso,beak,.003)(foot,v(side*.027+j*.014,.007,.047));
+ for(const name of ['WingLeft','WingRight']){
+   const wing=body.getObjectByName(name);
+   // The downloaded bird's beak is on +X, with its wings on the two sides of Z.
+   wing.geometry?.computeBoundingBox();
+   const local=wing.geometry?.boundingBox;
+   const side=local?Math.sign(local.min.z+local.max.z):name==='WingLeft'?-1:1;
+   const hinge=new T.Group();
+   hinge.position.set(.009,.053,side*.012);
+   body.add(hinge);
+   body.updateMatrixWorld(true);
+   hinge.attach(wing);
+   wings.push({hinge,side});
  }
- return (t)=>{
-   const elapsed=(t+seed)%21;
-   const flight=elapsed>10.5?(elapsed-10.5)/10.5:0;
-   const sweep=flight*TAU;
-   const hop=Math.max(0,Math.sin(elapsed*6.2))**12*.039;
-   const altitude=flight?1.18*Math.sin(Math.PI*flight)**1.35:hop;
-   const movement=flight?1:0;
-   root.position.set(x+Math.sin(sweep)*1.92,y+altitude,z+(1-Math.cos(sweep))*1.55);
-   root.rotation.y=flight?Math.atan2(1.92*Math.cos(sweep),1.55*Math.sin(sweep)):seed+.26*Math.sin(elapsed*1.7);
-   torso.rotation.x=flight?-.17*Math.cos(Math.PI*flight):.09;
-   head.rotation.x=flight?0:.56*Math.max(0,Math.sin(elapsed*3.2))**5;
-   head.rotation.y=.31*Math.sin(t*2.8+seed);
-   for(const [i,wing] of wings.entries()){
-     const side=i===0?-1:1;
-     wing.rotation.y=side*(1.12*(1-movement)+.12);
-     wing.rotation.z=side*(flight?.67*Math.sin(t*26)+.13:-.18);
+ return t=>{
+   const elapsed=(t+seed)%23;
+   const flying=elapsed>11.3;
+   const phase=flying?(elapsed-11.3)/11.7:0;
+   const theta=phase*TAU;
+   const hop=Math.max(0,Math.sin(elapsed*5.0))**14*.033;
+   const altitude=flying?1.06*Math.sin(Math.PI*phase)**1.25:hop;
+   const extension=flying?Math.min(1,phase*13,(1-phase)*15):0;
+   root.position.set(x+Math.sin(theta)*1.76,y+altitude,z+(1-Math.cos(theta))*1.28);
+   root.rotation.y=flying?Math.atan2(1.76*Math.cos(theta),1.28*Math.sin(theta)):
+     seed+.36*Math.sin(elapsed*1.4);
+   const peck=Math.max(0,Math.sin(elapsed*3.1))**9;
+   root.rotation.x=flying?-.19*Math.cos(Math.PI*phase):.18*peck;
+   for(const {hinge,side} of wings){
+     hinge.rotation.y=side*1.27*extension;
+     hinge.rotation.x=-side*(.74*Math.sin(t*33.0)+.13)*extension;
    }
  };
 }
 
-export function addAnimals(scene,ground){
- const group=new T.Group();group.name='Temple animals';scene.add(group);
- const dog=quadruped(group,true);
- const cat=quadruped(group,false);
- const peg=v(-20.11,ground(-20.11,-5.03)+.42,-5.03);
- const tetherMaterial=surface('#7f6a47');
- const rope=Array.from({length:15},()=>line(group,tetherMaterial,.010));
- const points=Array.from({length:rope.length+1},()=>new T.Vector3());
- const end=new T.Vector3();
+export function addAnimals(scene,ground,models,furTexture){
+ const group=makeRoot(scene,'Temple animals');
+ const dog=dogModel(group,models.jindo,furTexture);
+ const cat=catModel(group,models.cat);
+ const peg=new T.Vector3(-20.11,ground(-20.11,-5.03)+.42,-5.03);
+ const ropeMaterial=new T.MeshStandardMaterial({color:'#776544',roughness:1});
+ const rope=Array.from({length:20},()=>{
+   const mesh=new T.Mesh(shaft,ropeMaterial);
+   mesh.receiveShadow=true;group.add(mesh);return mesh;
+ });
+ const ropePoints=Array.from({length:rope.length+1},()=>new T.Vector3());
+ const end=new T.Vector3(),axis=new T.Vector3();
  const sparrows=[
-   bird(group,-12.02,ground(-12.02,12.20),12.20,1.6),
-   bird(group,-10.75,ground(-10.75,11.30),11.30,4.2),
-   bird(group,2.20,ground(2.20,8.70),8.70,6.9)
+   birdModel(group,models.sparrow,-11.37,ground(-11.37,12.2),12.2,1.5),
+   birdModel(group,models.sparrow,-10.75,ground(-10.75,11.3),11.3,4.2),
+   birdModel(group,models.sparrow,2.2,ground(2.2,8.7),8.7,6.9)
  ];
  let t=0;
- function tick(dt){
+ function tick(dt,viewer){
    t+=dt;
-   const da=t*.26, dx=-19.57+.83*Math.cos(da), dz=-3.91+.45*Math.sin(da);
-   dog.animal.position.set(dx,ground(dx,dz),dz);
-   dog.animal.rotation.y=Math.atan2(-.83*Math.sin(da),.45*Math.cos(da));
-   dog.pose(t,.46,.10+.14*Math.sin(t*.76));
-   dog.collar.localToWorld(end.set(.115,.062,-.019));
-   const slack=.23+Math.max(0,1.55-peg.distanceTo(end))*.18;
-   for(const [i,point] of points.entries()){
-     const ratio=i/rope.length;
-     point.copy(peg).lerp(end,ratio);
-     point.y=Math.max(ground(point.x,point.z)+.025,point.y-slack*Math.sin(Math.PI*ratio));
+   const a=t*.26;
+   const dx=-19.57+.83*Math.cos(a),dz=-3.91+.45*Math.sin(a);
+   dog.root.position.set(dx,ground(dx,dz),dz);
+   dog.root.rotation.y=Math.atan2(-.83*Math.sin(a),.45*Math.cos(a));
+   dog.pose(t,.48,!viewer||Math.hypot(viewer.x-dx,viewer.z-dz)<8.6);
+   dog.ring.getWorldPosition(end);
+   const sag=.17+Math.max(0,1.63-peg.distanceTo(end))*.21;
+   for(const [i,point] of ropePoints.entries()){
+     const u=i/rope.length;
+     point.copy(peg).lerp(end,u);
+     point.y=Math.max(ground(point.x,point.z)+.019,point.y-sag*Math.sin(Math.PI*u));
    }
-   for(const [i,segment] of rope.entries())segment(points[i],points[i+1]);
-   const a=t*.29, cx=-13.7+1.13*Math.cos(a),cz=7.94+.74*Math.sin(a);
-   cat.animal.position.set(cx,ground(cx,cz),cz);
-   cat.animal.rotation.y=Math.atan2(-1.13*Math.sin(a),.74*Math.cos(a));
-   cat.pose(t,.60,.19*Math.max(0,Math.sin(t*1.23))**5);
+   for(const [i,mesh] of rope.entries()){
+     const a=ropePoints[i],b=ropePoints[i+1];
+     axis.subVectors(b,a);
+     const length=axis.length();
+     mesh.position.copy(a).lerp(b,.5);
+     mesh.quaternion.setFromUnitVectors(UP,axis.divideScalar(Math.max(length,.0001)));
+     mesh.scale.set(.008,length,.008);
+   }
+   const c=t*.31,cx=-13.7+1.13*Math.cos(c),cz=7.94+.74*Math.sin(c);
+   cat.root.position.set(cx,ground(cx,cz),cz);
+   cat.root.rotation.y=Math.atan2(-1.13*Math.sin(c),.74*Math.cos(c));
+   cat.pose(t,.66);
    for(const animate of sparrows)animate(t);
  }
  tick(0);

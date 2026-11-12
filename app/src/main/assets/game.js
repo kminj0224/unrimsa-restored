@@ -10,10 +10,10 @@ const $=id=>document.getElementById(id);
 const canvas=$('map');
 const direction=new T.Vector3(-.51,.74,.43).normalize();
 const keys=new Set();
-const audio=Object.fromEntries(['bell','moktak','door','water'].map(n=>[n,new Audio('/'+n+'.ogg')]));
+const audio=Object.fromEntries(['bell','moktak','door','water'].map(n=>[n,new Audio('./'+n+'.ogg')]));
 for(const [key,vol] of Object.entries({bell:.81,moktak:.64,door:.41,water:.12}))audio[key].volume=vol;
 audio.water.loop=true;
-let world,walk,renderer,scene,camera,water,smoke,animals;
+let world,walk,renderer,scene,camera,water,smoke,animals,wake;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
 let dragMove=null,dragLook=null,moveOrigin=[0,0],lookOrigin=[0,0],stick=[0,0];
 let active=null,lastActionText='',lastSite='',feedbackUntil=0,bellAt=-Infinity,incenseAt=-Infinity;
@@ -71,8 +71,9 @@ function use(){
    report('낮은 상에 찻주전자와 잔 두 개가 놓여 있습니다.');
  }
 }
-function labelSite(player,room){
+function labelSite(player,room,wet){
  if(room)return room.name+' 내부';
+ if(wet!==null)return wet>0?'연꽃 연못 물속':'계곡 물속';
  const {x,z}=player;
  if(z>20.0)return '사찰로 오르는 산길';
  if(z>14.9&&Math.abs(x+4)<6.4)return '일주문';
@@ -83,6 +84,34 @@ function labelSite(player,room){
  if(Math.abs(x-sanctuary.x)<sanctuary.w*.51&&z<-6&&z>sanctuary.z)return '대웅전 앞';
  if(Math.abs(x-river(z))<11)return '계곡 산책로';
  return '운림사 마당';
+}
+
+function waterWake(scene){
+ const shape=new T.RingGeometry(.93,1,48).rotateX(-Math.PI/2);
+ const circles=Array.from({length:10},()=>{
+   const material=new T.MeshBasicMaterial({color:'#c3ddd3',transparent:true,depthWrite:false,opacity:0,side:T.DoubleSide});
+   const ring=new T.Mesh(shape,material);
+   ring.visible=false;ring.renderOrder=4;scene.add(ring);
+   return {ring,age:1.5};
+ });
+ let next=0,traveled=0;
+ return (dt,x,z,level,distance)=>{
+   if(level===null)traveled=0;
+   else if((traveled+=distance)>.34){
+     traveled=0;
+     const wave=circles[next++%circles.length];
+     wave.age=0;
+     wave.ring.position.set(x,level+.012,z);
+     wave.ring.visible=true;
+   }
+   for(const wave of circles){
+     if(!wave.ring.visible)continue;
+     wave.age+=dt;
+     wave.ring.scale.setScalar(.106+wave.age*.55);
+     wave.ring.material.opacity=.25*Math.max(0,1-wave.age/1.30)**1.7;
+     wave.ring.visible=wave.age<1.30;
+   }
+ };
 }
 
 function createSmoke(){
@@ -165,19 +194,21 @@ function update(now){
  if(now-previous<31)return;
  const dt=clamp((now-previous)/1000,.001,.063);
  previous=now;
- const p=walk.player;
+ const p=walk.player,oldX=p.x,oldZ=p.z;
+ const waterBefore=walk.waterAt(p.x,p.z,p.feet);
  if(!modalOpen()){
    const x=stick[0]+Number(keys.has('d'))-Number(keys.has('a'));
    const z=-stick[1]+Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));
    if(Math.abs(x)+Math.abs(z)>.034){
-     const a=Math.sin(p.yaw),b=Math.cos(p.yaw),pace=3.05*dt/Math.max(1,Math.hypot(x,z));
+     const a=Math.sin(p.yaw),b=Math.cos(p.yaw),pace=(waterBefore===null?3.05:1.88)*dt/Math.max(1,Math.hypot(x,z));
      walk.move((x*b+z*a)*pace,(x*a-z*b)*pace);
    }
    p.yaw+=(Number(keys.has('arrowright'))-Number(keys.has('arrowleft')))*dt*1.6;
  }
  const doorMotion=walk.tick(dt);
  if(doorMotion&&Math.floor(now/83)%2===0)renderer.shadowMap.needsUpdate=true;
- const room=walk.room(),name=labelSite(p,room);
+ const room=walk.room(),wet=walk.waterAt(p.x,p.z,p.feet),name=labelSite(p,room,wet);
+ wake(dt,p.x,p.z,wet,Math.hypot(p.x-oldX,p.z-oldZ));
  $('jump').hidden=modalOpen();
  $('jump').dataset.airborne=String(!p.grounded);
  if(name!==lastSite){$('place').textContent=name;lastSite=name;}
@@ -190,7 +221,7 @@ function update(now){
  }
  if(now>=feedbackUntil)$('status').hidden=true;
  if(audioStarted){
-   const d=Math.abs(p.x-river(p.z)),vol=(.04+.42*Math.exp(-d*.105))*(room ? .26 : 1);
+   const d=Math.abs(p.x-river(p.z)),vol=(wet===null?.04+.42*Math.exp(-d*.105):.43)*(room ? .26 : 1);
    if(Math.abs(audio.water.volume-vol)>.007)audio.water.volume=vol;
  }
  const bellTime=(now-bellAt)*.001;
@@ -203,7 +234,7 @@ function update(now){
  }
  const t=now*.001;
  for(const surface of water.waters)surface.material.uniforms.time.value=t;
- animals.tick(dt);
+ animals.tick(dt,p);
  camera.position.set(p.x,p.y+1.66,p.z);
  rotation.set(p.pitch,-p.yaw,0,'YXZ');camera.quaternion.setFromEuler(rotation);
  renderer.render(scene,camera);
@@ -356,13 +387,15 @@ async function boot(){
  const paths=[
    ['stone','stone.jpg',true],['wood','wood.jpg',true],['paper','paper.jpg',true],
    ['clay','clay.jpg',true],['earth','earth.jpg',true],['pond','pond.jpg',true],
-   ['bark','bark.jpg',true],['needles','needles.png',true],['ripples','ripples.png',false]
+   ['bark','bark.jpg',true],['needles','needles.png',true],['ripples','ripples.png',false],
+   ['weave','weave.jpg',true],['weaveNormal','weave-normal.jpg',false],['fur','jindo-fur.jpg',true]
  ];
- const [items,buddha,maple]=await Promise.all([
-   Promise.all(paths.map(([key,path,flag])=>loadTexture(textures,key,'/'+path,flag))),
-   gltf.loadAsync('/buddha.glb'),gltf.loadAsync('/maple.glb')
+ const [items,buddha,maple,...animalsAndProps]=await Promise.all([
+   Promise.all(paths.map(([key,path,flag])=>loadTexture(textures,key,'./'+path,flag))),
+   gltf.loadAsync('./buddha.glb'),gltf.loadAsync('./maple.glb'),
+   ...['cat','jindo','sparrow','teapot'].map(name=>gltf.loadAsync('./'+name+'.glb').then(asset=>[name,asset.scene]))
  ]);
- const maps=Object.fromEntries(items);
+ const maps=Object.fromEntries(items),models=Object.fromEntries(animalsAndProps);
  const sun=new T.DirectionalLight('#ffdfb3',2.26);
  sun.position.copy(direction).multiplyScalar(44);
  sun.castShadow=true;
@@ -376,13 +409,14 @@ async function boot(){
  scene.environment=pmrem.fromScene(environment,.15,.1,100).texture;
  environment.dispose();pmrem.dispose();
  sky();
- world=buildWorld(scene,maps);
+ world=buildWorld(scene,maps,models);
  statue(buddha);
  plantForest(scene,world,maps,maple.scene);
  water=addWater(scene,maps,direction);
+ wake=waterWake(scene);
  smoke=createSmoke();
  walk=walking(world);
- animals=addAnimals(scene,walk.floorAt);
+ animals=addAnimals(scene,walk.floorAt,models,maps.fur);
  try{$('guide').hidden=localStorage.getItem('unrimsa-seen')==='1';}catch{$('guide').hidden=false;}
  $('loading').hidden=true;
  started=running=true;

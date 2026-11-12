@@ -1,7 +1,7 @@
 import * as T from './vendor/three.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {Water} from './vendor/Water.js';
-import {clamp,court,mix,pond,random,river,terrainAt} from './world.js';
+import {clamp,court,mix,pond,random,river,riverHalfWidth,riverY,terrainAt} from './world.js';
 
 const TAU=Math.PI*2;
 const down=new T.Vector3(0,1,0);
@@ -166,7 +166,8 @@ export function plantForest(scene,world,maps,maple){
  ])place(x,z,s,k,true);
  for(let i=0;i<1600&&trees.length<159;i++){
    const x=sample(rng,-63,64),z=sample(rng,-65,58);
-   if((court.left-2.4<x&&x<court.right+2.4&&court.north-2.4<z&&z<23)||(z>20&&x>-8&&x<8)||Math.abs(x-river(z))<7.3)continue;
+   if((court.left-2.4<x&&x<court.right+2.4&&court.north-2.4<z&&z<23)||(z>20&&x>-8&&x<8)||
+      (x>court.right&&x<river(z)&&Math.abs(z-8.15)<1.9)||Math.abs(x-river(z))<7.3)continue;
    if(trees.some(([a,b])=>(a-x)**2+(b-z)**2<10.4))continue;
    const k=maples.length<11&&rng()<.13?'maple':'pine';
    place(x,z,sample(rng,.52,1.34),k,Math.abs(x)<32&&Math.abs(z)<36);
@@ -295,7 +296,7 @@ function riverPlane(){
  const pos=[],idx=[];
  for(let i=0;i<=112;i++){
    const z=-58+i;
-   const center=river(z),w=5.18+.24*Math.sin(z*.49)+.16*Math.cos(z*.78);
+   const center=river(z),w=riverHalfWidth(z);
    pos.push(center-w,-z,0,center+w,-z,0);
    if(i){const p=i*2;idx.push(p-2,p,p-1,p,p+1,p-1);}
  }
@@ -311,7 +312,7 @@ export function addWater(scene,maps,lightDirection){
  const lakeShape=new T.CircleGeometry(1,88).scale(pond.rx,pond.rz,1);
  const entries=[
    {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.71,color:'#2e5c43',width:384,height:256,scale:1.5,rate:.46,near:23},
-   {shape:riverPlane(),x:0,y:-.63,z:0,alpha:.78,color:'#4b7f69',width:384,height:208,scale:1.02,rate:.78,near:35}
+   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.78,color:'#4b7f69',width:384,height:208,scale:1.02,rate:.78,near:35}
  ];
  for(const data of entries){
    const water=new Water(data.shape,{textureWidth:data.width,textureHeight:data.height,clipBias:.0018,
