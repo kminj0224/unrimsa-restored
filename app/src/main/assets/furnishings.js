@@ -15,7 +15,7 @@ export function textiles(add,maps){
  const cord=new T.MeshStandardMaterial({color:'#95836e',roughness:.96});
 
  function padded(x,y,z,w,d,h,material,rotation=0,channels=0){
-   const segments=48,rings=10;
+   const segments=28,rings=6;
    const positions=[],uvs=[],indices=[];
    const turn=new T.Matrix4().makeRotationY(rotation).setPosition(x,y,z);
    const transform=(a,b,c)=>point(a,b,c).applyMatrix4(turn);
@@ -59,7 +59,7 @@ export function textiles(add,maps){
      const [u,v]=dimensions(j*TAU/segments,1);
      edge.push(transform(u*w/2,.38*h,v*d/2));
    }
-   add(new T.TubeGeometry(new T.CatmullRomCurve3(edge,true),64,Math.min(.009,h*.13),5,true),cord);
+   add(new T.TubeGeometry(new T.CatmullRomCurve3(edge,true),36,Math.min(.009,h*.13),5,true),cord);
  }
  function cushion(x,y,z,w,d,rotation=0,tea=false){
    padded(x,y,z,w,d,tea?.092:.114,tea?teaGreen:garnet,rotation);

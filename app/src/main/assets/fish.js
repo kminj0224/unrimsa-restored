@@ -1,4 +1,5 @@
 import * as T from './vendor/three.js';
+import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {pond,pondBed,pondRadius,river,riverHalfWidth,riverY,terrainAt} from './world.js';
 
 const TAU=Math.PI*2;
@@ -30,7 +31,7 @@ function tone(palette,style,x,y,z){
 }
 
 function bodyGeometry(style){
- const palette=palettes[style],segments=28,rings=50;
+ const palette=palettes[style],segments=style===3?12:20,rings=style===3?25:38;
  const pos=[],uv=[],colors=[],idx=[];
  for(let i=0;i<=rings;i++){
    const t=i/rings,z=blend(-.54,.52,t);
@@ -77,35 +78,42 @@ function bodyGeometry(style){
 function fishForm(style,scales){
  const {geo,fins}=bodyGeometry(style);
  const group=new T.Group();
- const skin=new T.MeshPhysicalMaterial({vertexColors:true,map:scales,bumpMap:scales,bumpScale:.004,
-   roughness:.44,clearcoat:.29,clearcoatRoughness:.34,metalness:.12});
+ const skin=new T.MeshStandardMaterial({vertexColors:true,map:scales,roughness:.48,metalness:.09});
  const finMat=new T.MeshStandardMaterial({color:style===3?'#83785a':style===1?'#bc9359':'#c67852',side:T.DoubleSide,
    transparent:true,opacity:.91,roughness:.57,depthWrite:false});
  group.add(new T.Mesh(geo,skin));
- for(const {g} of fins)group.add(new T.Mesh(g,finMat));
+ const finGeometries=fins.map(({g})=>g);
+ group.add(new T.Mesh(mergeGeometries(finGeometries),finMat));
+ for(const g of finGeometries)g.dispose();
+ const patches=group.children.slice();
+ const eyes=[],pupils=[],whiskers=[];
  for(const s of [-1,1]){
-   const eye=new T.Mesh(eyeShape,iris);
-   eye.position.set(s*.068,.038,.359);eye.scale.set(.013,.020,.021);
-   const pupil=new T.Mesh(eyeShape,finish);
-   pupil.position.set(s*.079,.038,.366);pupil.scale.set(.008,.013,.013);
-   group.add(eye,pupil);
+   eyes.push(eyeShape.clone().scale(.013,.020,.021).translate(s*.068,.038,.359));
+   pupils.push(eyeShape.clone().scale(.008,.013,.013).translate(s*.079,.038,.366));
    const whisker=new T.CatmullRomCurve3([[s*.027,-.023,.479],[s*.049,-.041,.492],[s*.074,-.051,.469]].map(p=>new T.Vector3(...p)));
-   group.add(new T.Mesh(new T.TubeGeometry(whisker,6,.0035,5,false),barbel));
+   whiskers.push(new T.TubeGeometry(whisker,5,.0035,4,false));
  }
- const patches=group.children.slice(0,fins.length+1);
- const pose=[];
- for(const m of patches){
-   const att=m.geometry.getAttribute('position');
-   const xyz=att.array.slice();
-   pose.push({att,xyz});
+ for(const [pieces,material] of [[eyes,iris],[pupils,finish],[whiskers,barbel]]){
+   group.add(new T.Mesh(mergeGeometries(pieces),material));
+   for(const g of pieces)g.dispose();
+ }
+ for(const mesh of patches){
+   const geo=mesh.geometry,pos=geo.getAttribute('position');
+   const even=new Float32Array(pos.count*3),odd=new Float32Array(pos.count*3);
+   for(let i=0;i<pos.count;i++){
+     const z=pos.getZ(i),a=smooth(-z,-.04,.65);
+     even[i*3]=Math.cos(z*7.4)*a*a*.11;
+     odd[i*3]=Math.sin(z*7.4)*a*a*.11;
+   }
+   geo.morphTargetsRelative=true;
+   geo.morphAttributes.position=[new T.BufferAttribute(even,3),new T.BufferAttribute(odd,3)];
+   mesh.updateMorphTargets();
  }
  return {group,swim(t,phase){
-   for(const {att,xyz} of pose){
-     for(let i=0;i<att.count;i++){
-       const j=i*3,z=xyz[j+2],a=smooth(-z,-.04,.65);
-       att.setX(i,xyz[j]+Math.sin(t*7.8+z*7.4+phase)*a*a*.11);
-     }
-     att.needsUpdate=true;
+   const angle=t*7.8+phase,a=Math.sin(angle),b=Math.cos(angle);
+   for(const mesh of patches){
+     mesh.morphTargetInfluences[0]=a;
+     mesh.morphTargetInfluences[1]=b;
    }
  }};
 }
@@ -146,7 +154,7 @@ export function aquaticLife(scene,scales){
      item.group.rotation.y=Math.atan2(nextX-x,nextZ-z);
      const visible=!viewer||Math.hypot(viewer.x-x,viewer.z-z)<23;
      item.group.visible=visible;
-     if(visible&&(!viewer||Math.hypot(viewer.x-x,viewer.z-z)<13))item.swim(t,i*1.81);
+     if(visible)item.swim(t,i*1.81);
    }
  };
 }

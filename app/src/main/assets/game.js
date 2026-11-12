@@ -1,7 +1,7 @@
 import * as T from './vendor/three.js';
 import {GLTFLoader} from './vendor/GLTFLoader.js';
 import {RoomEnvironment} from './vendor/RoomEnvironment.js';
-import {buildWorld,clamp,pond,random,river,sanctuary} from './world.js';
+import {buildWorld,clamp,pond,random,river,rooms,sanctuary} from './world.js';
 import {addWater,plantForest} from './nature.js';
 import {walking} from './walk.js';
 import {addAnimals} from './animals.js';
@@ -23,7 +23,7 @@ dawnBirds.loop=true;dawnBirds.volume=0;
 let world,walk,renderer,scene,camera,water,smoke,animals,wake,monk,fish,lightCycle,skyDome,lanternCycle,stream;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
 let hallLights=[],hallLighting=false,doorShadowPending=false;
-const renderBudgets=[835000,620000,465000];
+const renderBudgets=[500000,360000,256000,180000];
 let renderLevel=0,frameCount=0,frameTotal=0,fastWindows=0;
 let dragMove=null,dragLook=null,moveOrigin=[0,0],lookOrigin=[0,0],stick=[0,0];
 let active=null,lastActionText='',lastSite='',feedbackUntil=0,bellAt=-Infinity,incenseAt=-Infinity;
@@ -269,28 +269,28 @@ function resize(){
  if(!renderer)return;
  const w=canvas.clientWidth,h=canvas.clientHeight;
  if(!w||!h)return;
- const aspect=w/h,pixel=Math.min(devicePixelRatio,1.38,Math.sqrt(renderBudgets[renderLevel]/(w*h)));
+ const aspect=w/h,pixel=Math.min(devicePixelRatio,1.22,Math.sqrt(renderBudgets[renderLevel]/(w*h)));
  if(camera.aspect===aspect&&canvas.width===Math.floor(w*pixel)&&canvas.height===Math.floor(h*pixel))return;
  renderer.setPixelRatio(pixel);renderer.setSize(w,h,false);
  camera.aspect=aspect;camera.updateProjectionMatrix();
 }
 function adaptResolution(interval){
- if(interval>180)return;
- frameTotal+=interval;
- if(++frameCount<45)return;
+ if(interval>800)return;
+ frameTotal+=Math.min(interval,170);
+ if(++frameCount<18)return;
  const mean=frameTotal/frameCount;
  frameCount=0;frameTotal=0;
- if(mean>44&&renderLevel<renderBudgets.length-1){
+ if(mean>39&&renderLevel<renderBudgets.length-1){
    renderLevel++;fastWindows=0;resize();
  }else if(mean<35&&renderLevel>0){
-   if(++fastWindows>=6){renderLevel--;fastWindows=0;resize();}
+   if(++fastWindows>=10){renderLevel--;fastWindows=0;resize();}
  }else fastWindows=0;
 }
 function update(now){
  request=0;
  if(!running)return;
  request=requestAnimationFrame(update);
- // Rendering at up to 30 fps leaves GPU time for the real-time water mirrors.
+ // Keep the renderer near 30 FPS and adapt resolution if the device falls behind.
  if(now-previous<31)return;
  const interval=now-previous;
  adaptResolution(interval);
@@ -317,12 +317,17 @@ function update(now){
  const doorMotion=walk.tick(dt);
  if(doorMotion)doorShadowPending=true;
  else if(doorShadowPending){
-   renderer.shadowMap.needsUpdate=true;
+   renderer.shadowMap.needsUpdate=time.daylight>.23;
    doorShadowPending=false;
  }
  const room=walk.room(),wet=walk.waterAt(p.x,p.z,p.feet),name=labelSite(p,room,wet);
  const hallDistance=Math.max(Math.abs(p.x-sanctuary.x)-sanctuary.w/2,
    Math.abs(p.z-sanctuary.z)-sanctuary.d/2);
+ for(const roomInfo of rooms){
+   const distance=Math.max(Math.abs(p.x-roomInfo.x)-roomInfo.w/2,
+     Math.abs(p.z-roomInfo.z)-roomInfo.d/2);
+   world.interiors[roomInfo.id].visible=distance<(roomInfo.id==='main'?14:8);
+ }
  const nearHall=hallDistance<(hallLighting?8:6);
  if(nearHall!==hallLighting){
    hallLighting=nearHall;
@@ -354,7 +359,7 @@ function update(now){
  monk.tick(wallTime,now,(index,total,hour)=>{
    strikeSound();
    if(!modalOpen()&&Math.hypot(p.x-10.5,p.z-5)<26)report((hour===3?'새벽 타종':'저녁 타종')+' '+index+' / '+total);
- });
+ },p);
  const age=(now-incenseAt)*.001;
  if(world.incense.visible&&age>27)world.incense.visible=false;
  animateSmoke(age);
@@ -494,7 +499,7 @@ function statue(gltf){
  model.scale.setScalar(factor);
  holder.add(model);
  holder.position.copy(world.statueBase).z+=.19;
- scene.add(holder);
+ world.interiors.main.add(holder);
  const base=world.statueBase;
  const key=new T.SpotLight('#fff1d4',66,18,.50,.70,1.7);
  key.position.copy(base).add(new T.Vector3(-3.6,4.42,5.3));
@@ -520,7 +525,7 @@ async function boot(){
  scene=new T.Scene();
  scene.background=new T.Color('#98aca7');
  scene.fog=new T.FogExp2('#9fb2a9',.0102);
- camera=new T.PerspectiveCamera(61,1,.08,230);
+ camera=new T.PerspectiveCamera(61,1,.08,182);
  camera.position.set(-3.5,2.3,26);
  resize();
  new ResizeObserver(resize).observe(canvas);
@@ -541,7 +546,7 @@ async function boot(){
  const sun=new T.DirectionalLight('#ffdfb3',2.26);
  sun.position.copy(direction).multiplyScalar(44);
  sun.castShadow=true;
- sun.shadow.mapSize.set(1536,1536);
+ sun.shadow.mapSize.set(768,768);
  Object.assign(sun.shadow.camera,{left:-31,right:31,top:33,bottom:-33,near:2,far:106});
  sun.shadow.camera.updateProjectionMatrix();
  sun.shadow.normalBias=.032;sun.shadow.bias=-.0001;

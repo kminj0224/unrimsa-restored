@@ -294,7 +294,9 @@ function birdModel(parent,source,x,y,z,seed){
    hinge.attach(wing);
    wings.push({hinge,side});
  }
- return t=>{
+ return (t,viewer)=>{
+   root.visible=!viewer||Math.hypot(viewer.x-x,viewer.z-z)<20;
+   if(!root.visible)return;
    const elapsed=(t+seed)%23;
    const flying=elapsed>11.3;
    const phase=flying?(elapsed-11.3)/11.7:0;
@@ -320,12 +322,12 @@ export function addAnimals(scene,ground,models,furTexture,actions=[],coatPhoto){
  const cat=catModel(group,models.cat);
  const peg=new T.Vector3(-20.11,ground(-20.11,-5.03)+.42,-5.03);
  const ropeMaterial=new T.MeshStandardMaterial({color:'#776544',roughness:1});
- const rope=Array.from({length:20},()=>{
-   const mesh=new T.Mesh(shaft,ropeMaterial);
-   mesh.receiveShadow=true;group.add(mesh);return mesh;
- });
- const ropePoints=Array.from({length:rope.length+1},()=>new T.Vector3());
- const end=new T.Vector3(),axis=new T.Vector3();
+ const rope=new T.InstancedMesh(shaft,ropeMaterial,12);
+ rope.receiveShadow=true;rope.instanceMatrix.setUsage(T.DynamicDrawUsage);
+ rope.boundingSphere=new T.Sphere(peg.clone(),3.2);
+ group.add(rope);
+ const ropePoints=Array.from({length:rope.count+1},()=>new T.Vector3());
+ const end=new T.Vector3(),axis=new T.Vector3(),segment=new T.Object3D();
  const sparrows=[
    birdModel(group,models.sparrow,-11.37,ground(-11.37,12.2),12.2,1.5),
    birdModel(group,models.sparrow,-10.75,ground(-10.75,11.3),11.3,4.2),
@@ -385,7 +387,9 @@ export function addAnimals(scene,ground,models,furTexture,actions=[],coatPhoto){
      const age=t-(pet.begin??0);
      const response=reacting?(pet.kind==='feed'?.72+.26*Math.sin(age*12):.42*Math.sin(age*3.4)**2)*
        Math.min(1,age*3,(pet.until-t)*3):0;
-     pose(t,reacting?0:pet.pace,!viewer||Math.hypot(viewer.x-x,viewer.z-z)<4.2,response);
+     const distance=viewer?Math.hypot(viewer.x-x,viewer.z-z):0;
+     root.visible=distance<27;
+     if(root.visible)pose(t,reacting?0:pet.pace,distance<4.2,response);
      Object.assign(pet.action,{x,y:y+.4,z});
    }
    if(feeding){
@@ -393,22 +397,27 @@ export function addAnimals(scene,ground,models,furTexture,actions=[],coatPhoto){
      for(const [i,piece] of bites.children.entries())piece.visible=i>=Math.floor(fraction*12);
      if(t>=feeding.until){feeding=null;food.visible=false;}
    }
-   dog.ring.getWorldPosition(end);
-   const sag=.17+Math.max(0,1.63-peg.distanceTo(end))*.21;
-   for(const [i,point] of ropePoints.entries()){
-     const u=i/rope.length;
-     point.copy(peg).lerp(end,u);
-     point.y=Math.max(ground(point.x,point.z)+.019,point.y-sag*Math.sin(Math.PI*u));
+   rope.visible=dog.root.visible;
+   if(rope.visible){
+     dog.ring.getWorldPosition(end);
+     const sag=.17+Math.max(0,1.63-peg.distanceTo(end))*.21;
+     for(const [i,point] of ropePoints.entries()){
+       const u=i/rope.count;
+       point.copy(peg).lerp(end,u);
+       point.y=Math.max(ground(point.x,point.z)+.019,point.y-sag*Math.sin(Math.PI*u));
+     }
+     for(let i=0;i<rope.count;i++){
+       const a=ropePoints[i],b=ropePoints[i+1];
+       axis.subVectors(b,a);
+       const length=axis.length();
+       segment.position.copy(a).lerp(b,.5);
+       segment.quaternion.setFromUnitVectors(UP,axis.divideScalar(Math.max(length,.0001)));
+       segment.scale.set(.008,length,.008);
+       segment.updateMatrix();rope.setMatrixAt(i,segment.matrix);
+     }
+     rope.instanceMatrix.needsUpdate=true;
    }
-   for(const [i,mesh] of rope.entries()){
-     const a=ropePoints[i],b=ropePoints[i+1];
-     axis.subVectors(b,a);
-     const length=axis.length();
-     mesh.position.copy(a).lerp(b,.5);
-     mesh.quaternion.setFromUnitVectors(UP,axis.divideScalar(Math.max(length,.0001)));
-     mesh.scale.set(.008,length,.008);
-   }
-   for(const animate of sparrows)animate(t);
+   for(const animate of sparrows)animate(t,viewer);
  }
  tick(0);
  return {tick,interact};

@@ -330,9 +330,16 @@ export function addMonk(scene,model,maps,floorAt,mallet,holdDoor=()=>{}){
  shadow.position.y=.009;root.add(shadow);
  const schedule=bellSequence();
  let previousFrame=-Infinity;
- function tick(now,frame,emit){
+ function tick(now,frame,emit,viewer){
    const {plan,play}=schedule(now);
    const {point,yaw,rhythm,amount,activity,sleep}=monkLife(now,plan);
+   for(const hit of play)emit(hit,plan.times.length,plan.hour);
+   for(const room of rooms){
+     const close=Math.abs(point.x-room.x)<1.2&&Math.abs(point.z-(room.z+room.d/2))<1.20;
+     holdDoor(room.id,amount>0&&close);
+   }
+   root.visible=!viewer||Math.hypot(viewer.x-point.x,viewer.z-point.z)<35;
+   if(!root.visible)return plan;
    const resting=activity==='ring',prayer=activity==='prayer',reading=activity==='read'||activity==='tea';
    const ground=floorAt(point.x,point.z);
    const dt=(frame-previousFrame)*.001;
@@ -347,10 +354,6 @@ export function addMonk(scene,model,maps,floorAt,mallet,holdDoor=()=>{}){
    shadow.visible=sleep<.55;
    torso(.037*Math.sin(rhythm)*amount);
    head((resting?.055:prayer?.17:reading?.22:0)+.031*Math.sin(frame*.0019)*(1-sleep));
-   for(const room of rooms){
-     const close=Math.abs(point.x-room.x)<1.2&&Math.abs(point.z-(room.z+room.d/2))<1.20;
-     holdDoor(room.id,amount>0&&close);
-   }
    for(const limb of arms){
      limb.upper.quaternion.copy(limb.upperRest);
      limb.lower.quaternion.copy(limb.lowerRest);
@@ -369,7 +372,6 @@ export function addMonk(scene,model,maps,floorAt,mallet,holdDoor=()=>{}){
        reach(limb.upper,limb.lower,limb.wrist,grip,-limb.s);
      }
    }
-   for(const hit of play)emit(hit,plan.times.length,plan.hour);
    return plan;
  }
  return {root,tick};

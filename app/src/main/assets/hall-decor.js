@@ -29,7 +29,7 @@ function ornaments(){
  const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=4;return tex;
 }
 
-export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
+export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep},interior){
  const {x,z,w,d,h,floor:y}=room;
  const canopy=new T.MeshStandardMaterial({color:'#803e31',map:maps.wood,bumpMap:maps.wood,bumpScale:.016,roughness:.82});
  const shade=new T.MeshStandardMaterial({color:'#563327',map:maps.wood,roughness:.86});
@@ -50,7 +50,7 @@ export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
      roughness:.92,side:T.FrontSide
    }));
    art.name='Yeongsan Hoesangdo';
-   art.position.set(x,artY,artZ);scene.add(art);
+   art.position.set(x,artY,artZ);interior.add(art);
    for(const bar of [-1,1]){
      const barY=artY+bar*(artH/2+.057);
      pipe([x-artW/2-.23,barY,artZ+.016],[x+artW/2+.23,barY,artZ+.016],.064,.064,shade,undefined,14);
@@ -121,21 +121,21 @@ export function decorateHall(scene,room,altarZ,maps,{add,box,round,pipe,sweep}){
  }));
  const leaf=new T.MeshStandardMaterial({color:'#5b7051',emissive:'#253d1c',emissiveIntensity:.20,roughness:.9});
  const paperTag=new T.MeshStandardMaterial({color:'#ddc89a',map:maps.paper,roughness:.91,side:T.DoubleSide});
- const petal=new T.SphereGeometry(1,11,8);
+ const petal=new T.SphereGeometry(1,7,5);
  function lotusLantern(lx,ly,lz,top,variant,angle){
    pipe([lx,ly+.31,lz],[lx,top,lz],.009,.009,cord,undefined,6);
-   round(lx,ly-.12,lz,[[.107,0],[.207,.052],[.256,.127],[.267,.224],[.234,.30],[.144,.385],[.041,.423],[0,.43]],petalColors[variant],undefined,25);
-   for(let i=0;i<8;i++){
-     const a=i*TAU/8+angle;
+   round(lx,ly-.12,lz,[[.107,0],[.207,.052],[.256,.127],[.267,.224],[.234,.30],[.144,.385],[.041,.423],[0,.43]],petalColors[variant],undefined,16);
+   for(let i=0;i<7;i++){
+     const a=i*TAU/7+angle;
      const green=petal.clone().scale(.086,.124,.049).rotateX(-.54).translate(0,.037,.202);
      green.rotateY(a).translate(lx,ly,lz);add(green,leaf);
      const colored=petal.clone().scale(.084,.131,.043).rotateX(.21).translate(0,.122,.242);
      colored.rotateY(a+.15).translate(lx,ly,lz);add(colored,petalColors[variant]);
    }
-   const hook=new T.TorusGeometry(.100,.014,7,22).rotateX(-Math.PI/2).translate(lx,ly-.109,lz);
+   const hook=new T.TorusGeometry(.100,.014,5,14).rotateX(-Math.PI/2).translate(lx,ly-.109,lz);
    add(hook,bronze);
    pipe([lx,ly-.116,lz],[lx,ly-.197,lz],.008,.008,cord,undefined,5);
-   const tag=new T.PlaneGeometry(.10,.34,1,7);
+   const tag=new T.PlaneGeometry(.10,.34,1,4);
    const p=tag.getAttribute('position');
    for(let j=0;j<p.count;j++){
      const a=.17-p.getY(j);

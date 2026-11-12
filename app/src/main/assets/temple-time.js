@@ -88,11 +88,12 @@ export function templeLighting(scene,renderer,sun,ambient,sky,waters,hallLights)
    for(const water of waters){
      const u=water.material.uniforms;
      u.sunDirection.value.copy(direction);
+     u.daylight.value=daylight;
      u.sunColor.value.copy(lit).multiplyScalar(.032+.86*daylight);
      u.waterColor.value.copy(water.userData.dayColor).multiplyScalar(.07+.86*daylight);
    }
    for(const light of hallLights)light.intensity=light.userData.dayIntensity*(.16+.84*daylight);
-   if(Math.abs(now-lastShadow)>=30000){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
+   if(daylight>.16&&Math.abs(now-lastShadow)>=45000){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
    last=now;
    return state;
  };

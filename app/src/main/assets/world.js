@@ -84,7 +84,7 @@ function lathe(points,segments=32){
 }
 const boxGeometry=new T.BoxGeometry(1,1,1);
 const columnGeometry=new T.CylinderGeometry(.45,.5,1,16,1);
-const rockGeometry=new T.IcosahedronGeometry(1,2);
+const rockGeometry=new T.IcosahedronGeometry(1,1);
 const tr=new T.Matrix4(),q=new T.Quaternion(),sy=new T.Vector3(0,1,0);
 const p=new T.Vector3(),scale=new T.Vector3();
 function transform(g,x,y,z,sx,sy,sz,angle=0){
@@ -96,16 +96,16 @@ function tiledGeometry(w,d,peak){
  const pos=[],uv=[],col=[],idx=[];
  const shades=['#6f7071','#68696a','#747672','#747573','#646767','#67696b','#767571'].map(x=>new T.Color(x));
  const hip=.63;
- const strips=[0,.13,.25,.41,.65,.85,1];
- const offsets=[.017,.072,.085,.034,.012,.014,.017];
+ const strips=[0,.24,.46,.72,1];
+ const offsets=[.017,.079,.036,.014,.017];
  function plane(u,v,end,side){
    const a=end?side*w*(hip+(1-hip)*v)/2:u*w*(hip+(1-hip)*v)/2;
    const z=end?u*d*v/2:side*d*v/2;
    return [a,peak*(1-v)**1.34+.62*(Math.abs(u)*v)**6,z];
  }
  for(const end of [false,true])for(const side of [-1,1]){
-   const rows=Math.max(8,Math.round((end?w*(1-hip):d)*1.3));
-   const columns=Math.max(11,Math.round((end?d:w)*2.9));
+   const rows=Math.max(8,Math.round((end?w*(1-hip):d)*.99));
+   const columns=Math.max(11,Math.round((end?d:w)*2.25));
    for(let i=0;i<columns;i++)for(let j=0;j<rows;j++){
      const a=j/rows,b=(j+1)/rows;
      const color=shades[Math.floor(rand()*shades.length)];
@@ -137,6 +137,10 @@ function tiledGeometry(w,d,peak){
 
 export function buildWorld(scene,maps,models={}){
  const floors=[],solids=[],actions=[],doors=[],batches=new Map();
+ const interiors=Object.fromEntries(rooms.map(room=>{
+   const group=new T.Group();group.name=room.name+' 내부';scene.add(group);
+   return [room.id,group];
+ }));
  const stone=new T.MeshStandardMaterial({color:'#bcb4a3',map:maps.stone,bumpMap:maps.stone,bumpScale:.044,roughness:.92});
  const stones=['#8d8a77','#a8a08c','#a59c88','#bbb39d','#9f9c8b'].map(c=>new T.MeshStandardMaterial({color:c,map:maps.stone,bumpMap:maps.stone,bumpScale:.065,roughness:.97}));
  const wood=new T.MeshStandardMaterial({color:'#8a735f',map:maps.wood,bumpMap:maps.wood,bumpScale:.028,roughness:.78});
@@ -160,12 +164,26 @@ export function buildWorld(scene,maps,models={}){
  function add(g,m,parent){
    if(parent){const object=shadowMesh(g,m);parent.add(object);return object;}
    const key=section+':'+m.id;
-   if(!batches.has(key))batches.set(key,{g:[],m});
+   if(!batches.has(key))batches.set(key,{g:[],m,section});
    batches.get(key).g.push(g.index?g.toNonIndexed():g);
  }
  const linen=textiles(add,maps);
  function box(x,y,z,w,h,d,m,angle=0,parent){
    add(transform(boxGeometry,x,y+h/2,z,w,h,d,angle),m,parent);
+ }
+ function batchDoor(group){
+   const materials=new Map();
+   for(const mesh of group.children){
+     if(!materials.has(mesh.material))materials.set(mesh.material,[]);
+     materials.get(mesh.material).push(mesh.geometry);
+   }
+   group.clear();
+   for(const [material,geometries] of materials){
+     const merged=mergeGeometries(geometries);
+     if(!merged)throw Error('Door geometry could not be combined');
+     group.add(shadowMesh(merged,material));
+     for(const geometry of geometries)geometry.dispose();
+   }
  }
  function furnitureTop(x,y,z,w,d,h,mat){
    const bevel=.025,left=-w/2+bevel,right=w/2-bevel,front=-d/2+bevel,back=d/2-bevel;
@@ -263,7 +281,7 @@ export function buildWorld(scene,maps,models={}){
    m.position.set(x,y,z+.076);scene.add(m);
  }
 
- const turf=new T.Mesh(terrain(),new T.MeshStandardMaterial({vertexColors:true,map:maps.earth,roughness:.98,bumpMap:maps.earth,bumpScale:.13}));
+ const turf=new T.Mesh(terrain(),new T.MeshStandardMaterial({vertexColors:true,map:maps.earth,roughness:.98}));
  turf.receiveShadow=true;scene.add(turf);
  const {left,right,north,south}=court;
  const yard=new T.Shape();
@@ -389,12 +407,14 @@ export function buildWorld(scene,maps,models={}){
      const group=new T.Group(),cx=x+sign*w/8;
      panel(cx,y+.036,front-.19,leafWidth,doorHeight-.04,paper,group);
      for(const side of [-1,1])box(cx-sign*(leafWidth*.43),y+.90,front-.19+side*.082,.061,.17,.042,brass,0,group);
+     batchDoor(group);
      scene.add(group);
      const door={room:id,mesh:group,shift:sign*(leafWidth+.018)};
      doors.push(door);
      solid(cx,front-.19,leafWidth,.18,door);
      use('door:'+id,'미닫이문 열기',x+sign*Math.min(w/8,.76),y+1.04,front-.10,2.37,id);
    }
+   section=id+'-interior';
    const sh=z-d*.31;
    if(main){
      const pedestal=1.29;
@@ -402,7 +422,7 @@ export function buildWorld(scene,maps,models={}){
      box(x,y+.22,sh,8.28,.91,2.63,red);
      box(x,y+1.13,sh,8.53,.16,2.83,tan);
      statueBase.set(x,y+pedestal,sh);
-     decorateHall(scene,r,sh,maps,{add,box,round,pipe,sweep});
+     decorateHall(scene,r,sh,maps,{add,box,round,pipe,sweep},interiors.main);
      for(const side of [-1,1]){
        for(const dx of [2.25,3.09]){
          round(x+side*dx,y+pedestal,sh+.68,[[.09,0],[.14,.035],[.100,.10],[.137,.17],[.18,.27],[.155,.30],[.098,.21]],ceramic,undefined,34);
@@ -454,7 +474,7 @@ export function buildWorld(scene,maps,models={}){
        }));
        page.name='Lotus Sutra facsimile';
        page.rotation.x=-Math.PI/2;page.position.set(x,y+.570,sz);
-       page.receiveShadow=true;scene.add(page);
+       page.receiveShadow=true;interiors.west.add(page);
      }
      for(const dx of [-.295,-.147,0,.147,.295])box(x+dx,y+.569,sz,.002,.002,.516,cover);
      solid(x,sz,1.51,.93);
@@ -734,11 +754,15 @@ export function buildWorld(scene,maps,models={}){
      lowSolid(x,z,r*1.62,r*1.39,top);
    }
  }
- for(const {g,m} of batches.values()){
+ for(const {g,m,section} of batches.values()){
    const merged=mergeGeometries(g);
    if(!merged)throw Error('Static scene geometry could not be combined');
-   const mesh=shadowMesh(merged,m);scene.add(mesh);
+   const mesh=shadowMesh(merged,m);
+   if(section.endsWith('-interior')){
+     mesh.castShadow=false;
+     interiors[section.slice(0,-9)].add(mesh);
+   }else scene.add(mesh);
    for(const geometry of g)geometry.dispose();
  }
- return {floors,solids,actions,doors,flames,incense,lamps,smokeOrigin,mallet,statueBase,eaveLamps,lanternPaper};
+ return {floors,solids,actions,doors,flames,incense,lamps,smokeOrigin,mallet,statueBase,eaveLamps,lanternPaper,interiors};
 }

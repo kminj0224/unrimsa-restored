@@ -1,6 +1,6 @@
 import * as T from './vendor/three.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
-import {Water} from './vendor/Water.js';
+import {makeWaterSurface} from './water-surface.js';
 import {clamp,court,mix,pond,random,river,riverHalfWidth,riverY,terrainAt,yardContains,yardLevel} from './world.js';
 
 const TAU=Math.PI*2;
@@ -20,7 +20,7 @@ function pineModel(seed,detail){
  const rng=random(seed),branches=[],needles=[];
  function branch(points,diameter){
    const pos=[],uv=[],idx=[];
-   const sides=detail?8:6;
+   const sides=detail?5:4;
    for(let i=0;i<points.length;i++){
      const dir=points[Math.min(i+1,points.length-1)].clone().sub(points[Math.max(0,i-1)]).normalize();
      const q=new T.Quaternion().setFromUnitVectors(down,dir);
@@ -45,11 +45,11 @@ function pineModel(seed,detail){
  }
  const top=[v(0,0,0),v(-.09,1.13,.08),v(.13,2.27,.03),v(.09,3.40,-.15),v(.35,4.40,-.26),v(.19,5.18,-.32),v(.34,5.88,-.29),v(.44,6.25,-.18)];
  branch(top,[.23,.17,.13,.105,.075,.055,.028,.008]);
- for(let j=0;j<6;j++){
-   const a=j*TAU/6;
+ for(let j=0;j<3;j++){
+   const a=j*TAU/3;
    branch([v(Math.cos(a)*.52,-.013,Math.sin(a)*.52),v(Math.cos(a)*.24,.07,Math.sin(a)*.24),v(0,.37,0)],[.018,.09,.15]);
  }
- const mainCount=detail?17:11;
+ const mainCount=detail?11:8;
  for(let i=0;i<mainCount;i++){
    const f=(i+.65)/mainCount;
    const h=2.1+f*3.95;
@@ -62,24 +62,24 @@ function pineModel(seed,detail){
    const mid=start.clone().addScaledVector(dir,length*.47).add(v(0,sample(rng,-.19,.19),0));
    const tip=start.clone().addScaledVector(dir,length).addScaledVector(side,sample(rng,-.45,.45)).add(v(0,sample(rng,.12,.54),0));
    branch([start,mid,tip],[.11*(1-f)+.029,.045*(1-f)+.014,.010]);
-   const twigs=detail?12:7;
+   const twigs=detail?5:3;
    for(let j=0;j<twigs;j++){
      const t=(j+.82)/(twigs+.2);
      const base=mid.clone().lerp(tip,t);
      const n=sample(rng,.22,.73)*(1-.46*t);
      const c=base.clone().addScaledVector(side,(j%2===0?-1:1)*n).addScaledVector(dir,n*.39).add(v(0,sample(rng,.06,.31),0));
      branch([base,c],[detail?.018:.012,.004]);
-     const sprouts=detail?7:4;
+     const sprouts=detail?3:2;
      for(let k=0;k<sprouts;k++){
        const m=(k+.42)/sprouts;
        const b=base.clone().lerp(c,m);
        const bend=sample(rng,-.14,.19);
        const angle=a+sample(rng,-1.75,1.75),sz=sample(rng,.31,.78);
-       const e=b.clone().add(v(Math.cos(angle)*sz*.68+bend,sz*sample(rng,.34,.74),Math.sin(angle)*sz*.68));
+       const e=b.clone().add(v(Math.cos(angle)*sz*.82+bend,sz*sample(rng,.54,.94),Math.sin(angle)*sz*.82));
        const tint=color('#ffffff').multiplyScalar(sample(rng,.64,1.21));
        tint.g*=sample(rng,.96,1.06);
-       card(b,e,rng()*TAU,tint,sz*.55);
-       if(detail&&k%2===0)card(b,e,Math.PI/2+rng()*TAU,tint,sz*.48);
+       card(b,e,rng()*TAU,tint,sz*.71);
+       if(k===sprouts-1)card(b,e,Math.PI/2+rng()*TAU,tint,sz*.65);
      }
    }
  }
@@ -98,16 +98,15 @@ function instance(scene,geometry,material,items,shadow,receiveShadow){
  scene.add(mesh);
 }
 
-function batchInstances(scene,geometry,material,items,background=false){
- const buckets=new Map();
+function batchInstances(scene,geometry,material,items,background=false,shadow=true){
+ const buckets=new Map(),size=background?60:26;
  for(const item of items){
-   const size=background?41:21;
    const key=Math.floor(item.x/size)+','+Math.floor(item.z/size);
    if(!buckets.has(key))buckets.set(key,[]);
    buckets.get(key).push(item);
  }
  for(const chunk of buckets.values()){
-   const shade=!background&&chunk.some(p=>Math.abs(p.x)<38&&Math.abs(p.z)<36);
+   const shade=shadow&&!background&&chunk.some(p=>Math.abs(p.x)<27&&Math.abs(p.z)<27);
    instance(scene,geometry,material,chunk,shade,!background);
  }
 }
@@ -131,7 +130,7 @@ function batchMaple(scene,model,positions){
    mat.roughness=.82;
    mat.metalness=0;
    if(mat.name.includes('foliage'))mat.side=T.DoubleSide;
-   batchInstances(scene,mesh,mat,positions);
+   batchInstances(scene,mesh,mat,positions,false,!mat.name.includes('foliage'));
  }
 }
 
@@ -150,17 +149,17 @@ function woodlandPine(seed,far=false){
  const rng=random(seed),bark=[],needles=[];
  const trunk=new T.CylinderGeometry(.025,.19,6.06,far?5:7,1).translate(0,2.95,0);
  bark.push(trunk.toNonIndexed());trunk.dispose();
- const branches=far?7:19;
+ const branches=far?6:12;
  for(let i=0;i<branches;i++){
    const a=i*2.39996,f=i/(branches-1),y=1.61+f*4.14;
    const length=(1.85*(1-f)+.35)*sample(rng,.75,1.23);
    const root=v(0,y,0);
    const endpoint=v(Math.cos(a)*length,y+.19+f*.17,Math.sin(a)*length);
    const direction=endpoint.clone().sub(root);
-   const bough=new T.CylinderGeometry(.016,.062*(1-f)+.028,direction.length(),far?3:6,1,far);
+   const bough=new T.CylinderGeometry(.016,.062*(1-f)+.028,direction.length(),far?3:4,1,true);
    bough.applyQuaternion(new T.Quaternion().setFromUnitVectors(down,direction.clone().normalize()));
    bough.translate(...root.clone().lerp(endpoint,.5).toArray());bark.push(bough.toNonIndexed());bough.dispose();
-   const clumps=far?2:5;
+   const clumps=far?2:3;
    for(let j=0;j<clumps;j++){
      const ratio=.42+.57*j/(clumps-1);
      const twig=root.clone().lerp(endpoint,ratio);
@@ -168,8 +167,8 @@ function woodlandPine(seed,far=false){
      const size=sample(rng,.62,1.11)*(1.08-.25*f);
      const tip=twig.clone().add(v(Math.cos(turn)*size*.62,size*.73,Math.sin(turn)*size*.62));
      const tint=color('#ffffff').multiplyScalar(sample(rng,.68,.99));
-     needles.push(needleCard(twig,tip,a*.53,tint,size*.73));
-     if(!far||j===1)needles.push(needleCard(twig,tip,a*.53+Math.PI/2,tint,size*.66));
+     needles.push(needleCard(twig,tip,a*.53,tint,size*.84));
+     if(j===clumps-1)needles.push(needleCard(twig,tip,a*.53+Math.PI/2,tint,size*.66));
    }
  }
  return {trunk:combine(bark),crown:combine(needles)};
@@ -229,16 +228,16 @@ export function plantForest(scene,world,maps,maple){
    if(Math.hypot(xx,zz)>165||extra()>cover||Math.abs(xx-river(zz))<5.7)continue;
    distant[Math.floor(extra()*3)].push({x:xx,y,z:zz,scale:sample(extra,.51,1.36),angle:extra()*TAU});
  }
- const bark=new T.MeshStandardMaterial({map:maps.bark,bumpMap:maps.bark,bumpScale:.067,roughness:.90,color:'#c7ac90'});
- const needles=new T.MeshStandardMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,roughness:.88,color:'#b9c5a0'});
+ const bark=new T.MeshLambertMaterial({map:maps.bark,color:'#c7ac90'});
+ const needles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,color:'#b9c5a0'});
  for(let i=0;i<3;i++){
    const model=pineModel(1472+i*131,i!==2);
    batchInstances(scene,model.bark,bark,pinePositions[i]);
-   batchInstances(scene,model.needles,needles,pinePositions[i]);
+   batchInstances(scene,model.needles,needles,pinePositions[i],false,false);
  }
  const newTrees=woodlandPine(68022);
- batchInstances(scene,newTrees.trunk,bark,edge);
- batchInstances(scene,newTrees.crown,needles,edge);
+ batchInstances(scene,newTrees.trunk,bark,edge,false,false);
+ batchInstances(scene,newTrees.crown,needles,edge,false,false);
  batchMaple(scene,maple,maples);
  const farBark=new T.MeshLambertMaterial({color:'#786d5a'});
  const farNeedles=new T.MeshLambertMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,
@@ -374,60 +373,15 @@ function riverPlane(){
 }
 
 export function addWater(scene,maps,lightDirection){
- let reflectionPass=false,nextReflectionAt=0;
- const waters=[];
- const lakeShape=new T.CircleGeometry(1,88).scale(pond.rx,pond.rz,1);
+ const lakeShape=new T.CircleGeometry(1,64).scale(pond.rx,pond.rz,1);
  const entries=[
-   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#3a5649',width:320,height:224,scale:1.5,rate:.46,near:23},
-   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#506c64',width:320,height:192,scale:1.02,rate:.78,near:31}
+   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#3a5649',size:.49},
+   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.64,color:'#506c64',size:.78}
  ];
- for(const data of entries){
-   const water=new Water(data.shape,{textureWidth:data.width,textureHeight:data.height,clipBias:.0018,
-     waterNormals:maps.ripples,sunDirection:lightDirection.clone(),sunColor:'#ffdfad',waterColor:data.color,
-     distortionScale:data.scale,alpha:data.alpha,fog:true});
-   water.rotation.x=-Math.PI/2;
-   water.position.set(data.x,data.y,data.z);
-   water.material.transparent=true;water.material.depthWrite=false;
-   water.material.uniforms.size.value=data.rate;
-   water.receiveShadow=true;
-   water.renderOrder=2;
-   water.userData.distance=data.near;
-   water.userData.dayColor=water.material.uniforms.waterColor.value.clone();
+ const waters=entries.map(data=>{
+   const water=makeWaterSurface(data.shape,maps.ripples,lightDirection,data);
    scene.add(water);
-   waters.push(water);
-   const mirror=water.onBeforeRender;
-   let lastReflection=-Infinity;
-   const lastPosition=new T.Vector3(Infinity,0,0);
-   const lastRotation=new T.Quaternion(0,0,0,0);
-   water.onBeforeRender=(renderer,scene0,camera)=>{
-     if(reflectionPass)return;
-     const now=performance.now();
-     const delta=lastPosition.distanceToSquared(camera.position);
-     const turned=1-Math.abs(lastRotation.dot(camera.quaternion));
-     const distance=water===waters[0]
-       ?Math.hypot(camera.position.x-pond.x,camera.position.z-pond.z)
-       :Math.abs(camera.position.x-river(camera.position.z));
-     water.material.uniforms.eye.value.copy(camera.position);
-     const range=water.userData.distance;
-     const aboveSurface=camera.position.y>water.position.y+.01;
-     water.material.uniforms.reflectionMix.value=aboveSurface&&Number.isFinite(lastReflection)
-       ?1-T.MathUtils.smoothstep(distance,range-5,range):0;
-     if(!aboveSurface||distance>=range||now<nextReflectionAt||now-lastReflection<150)return;
-     if(now-lastReflection<2500&&delta<.009&&turned<.00018)return;
-     reflectionPass=true;
-     const other=waters.find(x=>x!==water);
-     const wasVisible=other?.visible;
-     if(other)other.visible=false;
-     try{
-       mirror(renderer,scene0,camera);
-       lastPosition.copy(camera.position);lastRotation.copy(camera.quaternion);
-       lastReflection=now;nextReflectionAt=now+95;
-       water.material.uniforms.reflectionMix.value=1-T.MathUtils.smoothstep(distance,range-5,range);
-     }finally{
-       if(other)other.visible=wasVisible;
-       reflectionPass=false;
-     }
-   };
- }
+   return water;
+ });
  return {waters,lotusCount:plantLotus(scene)};
 }
