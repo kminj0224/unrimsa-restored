@@ -62,11 +62,12 @@ function catModel(parent,source){
  root.add(body);
  finishModel(body);
  contacts(root,.16,.26,.068);
- return {root,pose(t,pace){
+ return {root,pose(t,pace,near,reaction=0){
    const phase=t*9.2;
    step(phase,pace);
    body.position.y=.004*Math.sin(t*2.5)+.008*pace*Math.abs(Math.cos(phase));
    body.rotation.z=.025*Math.sin(phase)*pace;
+   body.rotation.x=reaction*.14;
    body.scale.y=1+.015*Math.sin(t*2.2);
  }};
 }
@@ -166,7 +167,7 @@ function dogModel(parent,source,texture){
  const metalRing=new T.Mesh(new T.TorusGeometry(.023,.004,8,18),brass);
  metalRing.position.set(.111,.083,-.025);metalRing.rotation.y=.5;collar.add(metalRing);
  body.add(collar);
- return {root,ring:metalRing,pose(t,pace,near){
+ return {root,ring:metalRing,pose(t,pace,near,reaction=0){
    const phase=t*7.2;
    step(phase,pace);
    strands.visible=tailStrands.visible=near;
@@ -178,7 +179,8 @@ function dogModel(parent,source,texture){
    }
    body.position.y=.005*Math.sin(t*3)+Math.abs(Math.cos(phase))*.011*pace;
    body.rotation.z=Math.sin(phase)*.016*pace;
-   pivot.rotation.y=.24*Math.sin(t*4.5);
+   body.rotation.x=reaction*.12;
+   pivot.rotation.y=(.24+.16*reaction)*Math.sin(t*(4.5+reaction*2.7));
    pivot.rotation.x=.066*Math.sin(t*3.4);
  }};
 }
@@ -250,7 +252,7 @@ function birdModel(parent,source,x,y,z,seed){
  };
 }
 
-export function addAnimals(scene,ground,models,furTexture){
+export function addAnimals(scene,ground,models,furTexture,actions=[]){
  const group=makeRoot(scene,'Temple animals');
  const dog=dogModel(group,models.jindo,furTexture);
  const cat=catModel(group,models.cat);
@@ -267,14 +269,68 @@ export function addAnimals(scene,ground,models,furTexture){
    birdModel(group,models.sparrow,-10.75,ground(-10.75,11.3),11.3,4.2),
    birdModel(group,models.sparrow,2.2,ground(2.2,8.7),8.7,6.9)
  ];
- let t=0;
+ const pets=[
+   {id:'dog',label:'진돗개',animal:dog,x:-19.57,z:-3.91,rx:.83,rz:.45,speed:.26,pace:.48,clock:0},
+   {id:'cat',label:'고양이',animal:cat,x:-13.7,z:7.94,rx:1.13,rz:.74,speed:.31,pace:.66,clock:0}
+ ];
+ const food=new T.Group();scene.add(food);food.visible=false;
+ const plate=new T.Mesh(new T.LatheGeometry([[.015,0],[.075,0],[.103,.019],[.098,.027],[.088,.028],[.074,.008]]
+   .map(([x,y])=>new T.Vector2(x,y)),28),new T.MeshStandardMaterial({color:'#79765d',roughness:.56}));
+ food.add(plate);
+ const bites=new T.Group();food.add(bites);
+ const kibble=new T.MeshStandardMaterial({color:'#875430',roughness:.92});
+ const nugget=new T.DodecahedronGeometry(.011,0);
+ for(let i=0;i<11;i++){
+   const piece=new T.Mesh(nugget,kibble),a=i*2.39996,r=.016+.005*i;
+   piece.position.set(Math.cos(a)*r,.017,Math.sin(a)*r);piece.rotation.set(i*.77,i*1.37,i*.6);
+   bites.add(piece);
+ }
+ for(const pet of pets){
+   pet.action={id:'pet:'+pet.id,name:pet.label+'와 교감하기',x:pet.x,z:pet.z,y:1.5,dist:2.0};
+   actions.push(pet.action);
+ }
+ let t=0,feeding=null;
+ function interact(id,kind,viewer){
+   const pet=pets.find(p=>p.id===id);
+   if(!pet||!viewer||Math.hypot(viewer.x-pet.action.x,viewer.z-pet.action.z)>pet.action.dist+.2)return null;
+   if(pet.until>t)return '잠시 기다려 주세요.';
+   if(kind==='feed'&&feeding)return '다른 동물이 먹이를 먹고 있습니다.';
+   pet.kind=kind;pet.begin=t;pet.until=t+(kind==='feed'?4.7:2.4);
+   pet.look=Math.atan2(viewer.x-pet.action.x,viewer.z-pet.action.z);
+   if(kind==='feed'){
+     feeding=pet;
+     const dist=id==='dog'?.65:.31;
+     const x=pet.action.x+Math.sin(pet.look)*dist,z=pet.action.z+Math.cos(pet.look)*dist;
+     food.position.set(x,ground(x,z)+.017,z);
+     for(const piece of bites.children)piece.visible=true;
+     food.visible=true;
+   }
+   return kind==='feed'?(id==='dog'?'진돗개가 사료 냄새를 맡고 먹기 시작합니다.':'고양이가 먹이 쪽으로 고개를 숙입니다.'):
+     (id==='dog'?'진돗개가 꼬리를 흔듭니다.':'고양이가 손 쪽으로 몸을 기울입니다.');
+ }
  function tick(dt,viewer){
    t+=dt;
-   const a=t*.26;
-   const dx=-19.57+.83*Math.cos(a),dz=-3.91+.45*Math.sin(a);
-   dog.root.position.set(dx,ground(dx,dz),dz);
-   dog.root.rotation.y=Math.atan2(-.83*Math.sin(a),.45*Math.cos(a));
-   dog.pose(t,.48,!viewer||Math.hypot(viewer.x-dx,viewer.z-dz)<8.6);
+   for(const pet of pets){
+     const reacting=t<(pet.until??0),a=pet.clock*pet.speed;
+     if(!reacting)pet.clock+=dt;
+     const {root,pose}=pet.animal;
+     const x=pet.x+pet.rx*Math.cos(a),z=pet.z+pet.rz*Math.sin(a);
+     const y=ground(x,z);
+     root.position.set(x,y,z);
+     const facing=reacting?pet.look:Math.atan2(-pet.rx*Math.sin(a),pet.rz*Math.cos(a));
+     const turn=Math.atan2(Math.sin(facing-root.rotation.y),Math.cos(facing-root.rotation.y));
+     root.rotation.y+=dt?turn*Math.min(1,dt*9):turn;
+     const age=t-(pet.begin??0);
+     const response=reacting?(pet.kind==='feed'?.72+.26*Math.sin(age*12):.42*Math.sin(age*3.4)**2)*
+       Math.min(1,age*3,(pet.until-t)*3):0;
+     pose(t,reacting?0:pet.pace,!viewer||Math.hypot(viewer.x-x,viewer.z-z)<8.6,response);
+     Object.assign(pet.action,{x,y:y+.4,z});
+   }
+   if(feeding){
+     const fraction=(t-feeding.begin)/(feeding.until-feeding.begin);
+     for(const [i,piece] of bites.children.entries())piece.visible=i>=Math.floor(fraction*12);
+     if(t>=feeding.until){feeding=null;food.visible=false;}
+   }
    dog.ring.getWorldPosition(end);
    const sag=.17+Math.max(0,1.63-peg.distanceTo(end))*.21;
    for(const [i,point] of ropePoints.entries()){
@@ -290,12 +346,8 @@ export function addAnimals(scene,ground,models,furTexture){
      mesh.quaternion.setFromUnitVectors(UP,axis.divideScalar(Math.max(length,.0001)));
      mesh.scale.set(.008,length,.008);
    }
-   const c=t*.31,cx=-13.7+1.13*Math.cos(c),cz=7.94+.74*Math.sin(c);
-   cat.root.position.set(cx,ground(cx,cz),cz);
-   cat.root.rotation.y=Math.atan2(-1.13*Math.sin(c),.74*Math.cos(c));
-   cat.pose(t,.66);
    for(const animate of sparrows)animate(t);
  }
  tick(0);
- return {tick};
+ return {tick,interact};
 }

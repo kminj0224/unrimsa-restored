@@ -5,6 +5,9 @@ import {buildWorld,clamp,pond,random,river,sanctuary} from './world.js';
 import {addWater,plantForest} from './nature.js';
 import {walking} from './walk.js';
 import {addAnimals} from './animals.js';
+import {templeLighting} from './temple-time.js';
+import {addMonk,bellPlan,malletAngle} from './monk.js';
+import {aquaticLife} from './fish.js';
 
 const $=id=>document.getElementById(id);
 const canvas=$('map');
@@ -13,14 +16,72 @@ const keys=new Set();
 const audio=Object.fromEntries(['bell','moktak','door','water'].map(n=>[n,new Audio('./'+n+'.ogg')]));
 for(const [key,vol] of Object.entries({bell:.81,moktak:.64,door:.41,water:.12}))audio[key].volume=vol;
 audio.water.loop=true;
-let world,walk,renderer,scene,camera,water,smoke,animals,wake;
+let world,walk,renderer,scene,camera,water,smoke,animals,wake,monk,fish,lightCycle,skyDome;
 let muted=false,audioStarted=false,started=false,running=false,request=0,previous=0;
 let dragMove=null,dragLook=null,moveOrigin=[0,0],lookOrigin=[0,0],stick=[0,0];
 let active=null,lastActionText='',lastSite='',feedbackUntil=0,bellAt=-Infinity,incenseAt=-Infinity;
 const rotation=new T.Euler(0,0,0,'YXZ');
 const rng=random(3111);
+let selectedPet=null,bookPage=1,shownMinute=-1,bellContext,bellBuffer,bellMaster,bellPan;
+const bellVoices=Array.from({length:6},()=>new Audio('./bell.ogg'));
+let voice=0;
 
-function modalOpen(){return !$('guide').hidden||!$('book').hidden;}
+function enableBellAudio(){
+ if(muted)return;
+ const AudioEngine=window.AudioContext||window.webkitAudioContext;
+ if(!AudioEngine)return;
+ if(!bellContext){
+   try{
+     bellContext=new AudioEngine();
+     bellMaster=bellContext.createGain();
+     bellMaster.connect(bellContext.destination);
+     bellPan=bellContext.createStereoPanner();
+     bellPan.connect(bellMaster);
+     fetch('./bell.ogg').then(r=>r.arrayBuffer()).then(b=>bellContext.decodeAudioData(b))
+       .then(b=>{bellBuffer=b;}).catch(()=>{});
+   }catch{}
+ }
+ if(bellContext?.state==='suspended')bellContext.resume().catch(()=>{});
+}
+function strikeSound(){
+ if(muted)return;
+ const p=walk.player;
+ const dist=Math.hypot(p.x-10.5,p.z-5);
+ const volume=(walk.room()?.72:1)*.83/(1+dist*.025+dist*dist*.00071);
+ if(bellBuffer&&bellContext.state==='running'){
+   const clip=bellContext.createBufferSource(),gain=bellContext.createGain();
+   clip.buffer=bellBuffer;gain.gain.value=volume;
+   const side=((10.5-p.x)*Math.cos(p.yaw)+(5-p.z)*Math.sin(p.yaw))/Math.max(2,dist);
+   if(bellPan){
+     bellPan.pan.setTargetAtTime(clamp(side*.76,-.76,.76),bellContext.currentTime,.08);
+     clip.connect(gain).connect(bellPan);
+   }else clip.connect(gain).connect(bellMaster);
+   clip.start();
+   clip.onended=()=>{clip.disconnect();gain.disconnect();};
+ }else{
+   const item=bellVoices[voice++%bellVoices.length];
+   item.currentTime=0;item.volume=volume;
+   item.play().catch(()=>{});
+ }
+}
+function showBook(page){
+ bookPage=page;
+ $('bookImage').src='./sutra-'+page+'.jpg';
+ $('bookImage').alt=page===1?'묘법연화경 권2의 변상도와 권수':'묘법연화경 권2의 펼친 면';
+ $('bookPage').textContent=page+' / 2';
+ $('bookPrevious').disabled=page===1;
+ $('bookNext').disabled=page===2;
+}
+function finishPet(kind){
+ if(selectedPet&&kind){
+   const result=animals.interact(selectedPet,kind,walk.player);
+   if(result)report(result);
+ }
+ selectedPet=null;$('pet').hidden=true;
+}
+
+
+function modalOpen(){return !$('guide').hidden||!$('book').hidden||!$('pet').hidden;}
 function neutral(){
  dragMove=dragLook=null;stick=[0,0];keys.clear();
  for(const key of ['left','top','bottom'])$('stick').style[key]='';
@@ -32,6 +93,7 @@ function sound(name){
  item.play().catch(()=>{});
 }
 function ambient(){
+ enableBellAudio();
  if(muted||audioStarted)return;
  audioStarted=true;
  audio.water.play().catch(()=>{audioStarted=false;});
@@ -54,7 +116,8 @@ function use(){
    if(!walk.toggleDoor(a.room)){report('문에서 한 걸음 물러나 주세요.');return;}
    sound('door');
  }else if(a.id==='bell'){
-   bellAt=now;sound('bell');report('범종을 울렸습니다.');
+   if(bellPlan(Date.now())?.phase==='ring'){report('스님이 범종을 울리고 있습니다.');return;}
+   bellAt=now;strikeSound();report('범종을 울렸습니다.');
  }else if(a.id==='moktak'){
    sound('moktak');report('목탁을 두드렸습니다.');
  }else if(a.id==='lamp'){
@@ -64,7 +127,11 @@ function use(){
    incenseAt=now;world.incense.visible=true;
    report('향을 피웠습니다.');
  }else if(a.id==='read'){
-   neutral();$('book').hidden=false;
+   neutral();showBook(1);$('book').hidden=false;
+ }else if(a.id.startsWith('pet:')){
+   neutral();selectedPet=a.id.slice(4);
+   $('petTitle').textContent=selectedPet==='dog'?'진돗개':'고양이';
+   $('pet').hidden=false;
  }else if(a.id==='bedding'){
    report('돗자리 위에 요와 접은 이불이 놓여 있습니다.');
  }else if(a.id==='tea'){
@@ -145,7 +212,7 @@ function animateSmoke(age){
 }
 function sky(){
  const sky=new T.Mesh(new T.SphereGeometry(149,28,14),new T.ShaderMaterial({
-   side:T.BackSide,depthWrite:false,uniforms:{sun:{value:direction}},
+   side:T.BackSide,depthWrite:false,uniforms:{sun:{value:direction.clone()},daylight:{value:1},night:{value:0},twilight:{value:0}},
    vertexShader:`
      varying vec3 dome;
      void main(){
@@ -154,6 +221,7 @@ function sky(){
      }`,
    fragmentShader:`
      uniform vec3 sun;
+     uniform float daylight,night,twilight;
      varying vec3 dome;
      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
      float noise(vec2 p){
@@ -163,12 +231,23 @@ function sky(){
      void main(){
        vec3 d=normalize(dome);
        float y=max(0.,d.y);
-       vec3 light=mix(vec3(.59,.66,.65),vec3(.19,.35,.49),pow(y,.71));
+       vec3 dayColor=mix(vec3(.59,.66,.65),vec3(.19,.35,.49),pow(y,.71));
+       vec3 darkColor=mix(vec3(.022,.035,.066),vec3(.006,.011,.029),pow(y,.44));
        vec2 p=d.xz/(y+.31)*4.8;
        float cloud=noise(p)*.61+noise(p*2.1)*.27+noise(p*4.3)*.12;
        float glow=max(0.,dot(d,sun));
-       light=mix(light,vec3(.82,.84,.80),smoothstep(.52,.79,cloud)*.48*smoothstep(.02,.17,y));
-       light+=vec3(.28,.20,.105)*pow(glow,8.)+vec3(1.2,.84,.40)*smoothstep(.9989,.9998,glow);
+       float cover=smoothstep(.52,.79,cloud)*.48*smoothstep(.02,.17,y);
+       dayColor=mix(dayColor,vec3(.82,.84,.80),cover);
+       vec3 light=mix(darkColor,dayColor,daylight);
+       light+=vec3(.45,.164,.074)*pow(glow,3.)*pow(1.-y,3.)*twilight;
+       light+=(vec3(.28,.20,.105)*pow(glow,8.)+vec3(1.2,.84,.40)*smoothstep(.9989,.9998,glow))*daylight;
+       vec2 starGrid=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)))*156.;
+       vec2 cell=floor(starGrid),spot=vec2(hash(cell+vec2(12.6,28.)),hash(cell+vec2(3.2,17.)));
+       float star=(1.-smoothstep(.021,.127,length(fract(starGrid)-spot)))*smoothstep(.989,1.,hash(cell))*smoothstep(.11,.38,y);
+       light+=vec3(.63,.73,.95)*star*night*(1.-cover);
+       vec3 lunar=normalize(vec3(.44,.52,-.67));
+       float moonSpot=max(0.,dot(d,lunar));
+       light+=(vec3(.16,.22,.38)*pow(moonSpot,340.)+vec3(.72,.78,.83)*smoothstep(.99991,.99997,moonSpot))*night;
        gl_FragColor=vec4(light,1.);
        #include <tonemapping_fragment>
        #include <colorspace_fragment>
@@ -176,6 +255,7 @@ function sky(){
  }));
  sky.renderOrder=-10;sky.frustumCulled=false;
  scene.add(sky);
+ return sky;
 }
 function resize(){
  if(!renderer)return;
@@ -195,6 +275,13 @@ function update(now){
  const dt=clamp((now-previous)/1000,.001,.063);
  previous=now;
  const p=walk.player,oldX=p.x,oldZ=p.z;
+ const wallTime=Date.now(),time=lightCycle(wallTime);
+ const minute=Math.floor(time.ms/60000);
+ if(minute!==shownMinute){
+   shownMinute=minute;
+   const hh=String(Math.floor(minute/60)).padStart(2,'0'),mm=String(minute%60).padStart(2,'0');
+   $('clock').textContent=hh+':'+mm+' 한국 · '+time.period;
+ }
  const waterBefore=walk.waterAt(p.x,p.z,p.feet);
  if(!modalOpen()){
    const x=stick[0]+Number(keys.has('d'))-Number(keys.has('a'));
@@ -212,6 +299,7 @@ function update(now){
  $('jump').hidden=modalOpen();
  $('jump').dataset.airborne=String(!p.grounded);
  if(name!==lastSite){$('place').textContent=name;lastSite=name;}
+ animals.tick(dt,p);
  active=modalOpen()?null:walk.action();
  $('action').hidden=!active;
  $('aim').classList.toggle('ready',Boolean(active));
@@ -224,8 +312,13 @@ function update(now){
    const d=Math.abs(p.x-river(p.z)),vol=(wet===null?.04+.42*Math.exp(-d*.105):.43)*(room ? .26 : 1);
    if(Math.abs(audio.water.volume-vol)>.007)audio.water.volume=vol;
  }
- const bellTime=(now-bellAt)*.001;
- world.mallet.rotation.x=bellTime<2.9?.29*Math.sin(bellTime*10.4)*Math.exp(-bellTime*2.72):0;
+ const ritual=bellPlan(wallTime),bellTime=(now-bellAt)*.001;
+ world.mallet.rotation.x=ritual?.phase==='ring'?malletAngle(ritual):
+   bellTime<2.9?.29*Math.sin(bellTime*10.4)*Math.exp(-bellTime*2.72):0;
+ monk.tick(wallTime,now,(index,total,hour)=>{
+   strikeSound();
+   if(!modalOpen()&&Math.hypot(p.x-10.5,p.z-5)<26)report((hour===3?'새벽 타종':'저녁 타종')+' '+index+' / '+total);
+ });
  const age=(now-incenseAt)*.001;
  if(world.incense.visible&&age>27)world.incense.visible=false;
  animateSmoke(age);
@@ -234,8 +327,9 @@ function update(now){
  }
  const t=now*.001;
  for(const surface of water.waters)surface.material.uniforms.time.value=t;
- animals.tick(dt,p);
+ fish(dt,p);
  camera.position.set(p.x,p.y+1.66,p.z);
+ skyDome.position.copy(camera.position);
  rotation.set(p.pitch,-p.yaw,0,'YXZ');camera.quaternion.setFromEuler(rotation);
  renderer.render(scene,camera);
 }
@@ -297,7 +391,8 @@ window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur',neutral);
 window.pauseTemple=()=>{
  neutral();
- for(const clip of Object.values(audio))clip.pause();
+ for(const clip of [...Object.values(audio),...bellVoices])clip.pause();
+ bellContext?.suspend().catch(()=>{});
  audioStarted=false;
 };
 document.addEventListener('visibilitychange',()=>{
@@ -312,6 +407,11 @@ $('resume').onclick=()=>{
  ambient();
 };
 $('bookClose').onclick=()=>{$('book').hidden=true;};
+$('bookPrevious').onclick=()=>showBook(Math.max(1,bookPage-1));
+$('bookNext').onclick=()=>showBook(Math.min(2,bookPage+1));
+$('petTouch').onclick=()=>finishPet('touch');
+$('petFeed').onclick=()=>finishPet('feed');
+$('petClose').onclick=()=>finishPet(null);
 $('reset').onclick=()=>{
  if(!started)return;
  walk.reset();neutral();bellAt=incenseAt=-Infinity;world.flames.visible=world.incense.visible=false;
@@ -323,7 +423,8 @@ $('reset').onclick=()=>{
 $('sound').onclick=()=>{
  muted=!muted;$('sound').textContent=muted?'소리 끔':'소리 켬';
  $('sound').setAttribute('aria-pressed',String(muted));
- for(const clip of Object.values(audio))clip.muted=muted;
+ for(const clip of [...Object.values(audio),...bellVoices])clip.muted=muted;
+ if(bellMaster)bellMaster.gain.value=Number(!muted);
  if(muted){audio.water.pause();audioStarted=false;}else ambient();
 };
 
@@ -388,12 +489,13 @@ async function boot(){
    ['stone','stone.jpg',true],['wood','wood.jpg',true],['paper','paper.jpg',true],
    ['clay','clay.jpg',true],['earth','earth.jpg',true],['pond','pond.jpg',true],
    ['bark','bark.jpg',true],['needles','needles.png',true],['ripples','ripples.png',false],
-   ['weave','weave.jpg',true],['weaveNormal','weave-normal.jpg',false],['fur','jindo-fur.jpg',true]
+   ['weave','weave.jpg',true],['weaveNormal','weave-normal.jpg',false],['fur','jindo-fur.jpg',true],
+   ['tanghwa','tanghwa.jpg',true],['sutra1','sutra-1.jpg',true],['carpScales','carp-scales.jpg',true]
  ];
  const [items,buddha,maple,...animalsAndProps]=await Promise.all([
    Promise.all(paths.map(([key,path,flag])=>loadTexture(textures,key,'./'+path,flag))),
    gltf.loadAsync('./buddha.glb'),gltf.loadAsync('./maple.glb'),
-   ...['cat','jindo','sparrow','teapot'].map(name=>gltf.loadAsync('./'+name+'.glb').then(asset=>[name,asset.scene]))
+   ...['cat','jindo','sparrow','teapot','monk-rig'].map(name=>gltf.loadAsync('./'+name+'.glb').then(asset=>[name,asset.scene]))
  ]);
  const maps=Object.fromEntries(items),models=Object.fromEntries(animalsAndProps);
  const sun=new T.DirectionalLight('#ffdfb3',2.26);
@@ -403,12 +505,20 @@ async function boot(){
  Object.assign(sun.shadow.camera,{left:-31,right:31,top:33,bottom:-33,near:2,far:106});
  sun.shadow.camera.updateProjectionMatrix();
  sun.shadow.normalBias=.032;sun.shadow.bias=-.0001;
- scene.add(sun,new T.HemisphereLight('#d6e4e4','#69594d',1.16));
+ const ambientLight=new T.HemisphereLight('#d6e4e4','#69594d',1.16);
+ scene.add(sun,ambientLight);
+ const lanterns=[[-9,2.23,12],[1,2.22,4],[-9,2.22,-6],[10.47,3.15,6.88],[-17.38,3.04,5.96]].map(([x,y,z],i)=>{
+   const light=new T.PointLight('#ffc185',0,i===3?7.6:5.0,2);
+   light.position.set(x,y,z);
+   light.userData.maximum=i===3?11:6.3;
+   scene.add(light);
+   return light;
+ });
  const environment=new RoomEnvironment(renderer);
  const pmrem=new T.PMREMGenerator(renderer);
  scene.environment=pmrem.fromScene(environment,.15,.1,100).texture;
  environment.dispose();pmrem.dispose();
- sky();
+ skyDome=sky();
  world=buildWorld(scene,maps,models);
  statue(buddha);
  plantForest(scene,world,maps,maple.scene);
@@ -416,7 +526,11 @@ async function boot(){
  wake=waterWake(scene);
  smoke=createSmoke();
  walk=walking(world);
- animals=addAnimals(scene,walk.floorAt,models,maps.fur);
+ animals=addAnimals(scene,walk.floorAt,models,maps.fur,world.actions);
+ fish=aquaticLife(scene,maps.carpScales);
+ monk=addMonk(scene,models['monk-rig'],maps,walk.floorAt,world.mallet);
+ lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,lanterns);
+ lightCycle(Date.now());
  try{$('guide').hidden=localStorage.getItem('unrimsa-seen')==='1';}catch{$('guide').hidden=false;}
  $('loading').hidden=true;
  started=running=true;

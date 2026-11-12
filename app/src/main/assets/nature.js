@@ -145,6 +145,42 @@ function batchMaple(scene,model,positions){
  }
 }
 
+function woodlandPine(seed){
+ const rng=random(seed),crowns=[];
+ const trunk=new T.CylinderGeometry(.024,.19,5.95,7,1).translate(0,2.975,0);
+ for(let i=0;i<25;i++){
+   const a=i*2.39996,f=i/24,y=1.62+f*4.31;
+   const length=(1.85*(1-f)+.38)*sample(rng,.72,1.22);
+   const x=Math.cos(a)*length*.62,z=Math.sin(a)*length*.62;
+   const tint=new T.Color('#ffffff').multiplyScalar(sample(rng,.74,1.02));
+   for(let j=0;j<3;j++){
+     const plane=new T.PlaneGeometry(length*.85,length*1.32,1,1);
+     plane.rotateX(-.57+j*.41).rotateY(-a+j*1.71);
+     plane.translate(x,y+.22*j,z);
+     const c=[];
+     for(let k=0;k<4;k++)c.push(tint.r,tint.g,tint.b);
+     plane.setAttribute('color',new T.Float32BufferAttribute(c,3));
+     crowns.push(plane.toNonIndexed());plane.dispose();
+   }
+ }
+ return {trunk,crown:combine(crowns)};
+}
+
+function distantPine(seed){
+ const rng=random(seed),parts=[];
+ for(let tier=0;tier<7;tier++){
+   const y=1.24+tier*.76,r=(1.52-tier*.184)*sample(rng,.81,1.14);
+   const g=new T.ConeGeometry(r,1.72-tier*.068,7,1).rotateY(rng()*TAU).translate(
+     sample(rng,-.19,.19),y+.70,sample(rng,-.19,.19));
+   const tint=new T.Color(tier%2===0?'#475e3c':'#526743').multiplyScalar(sample(rng,.80,1.10));
+   const color=[];
+   for(let i=0;i<g.getAttribute('position').count;i++)color.push(tint.r,tint.g,tint.b);
+   g.setAttribute('color',new T.Float32BufferAttribute(color,3));
+   parts.push(g.toNonIndexed());g.dispose();
+ }
+ return combine(parts);
+}
+
 export function plantForest(scene,world,maps,maple){
  const rng=random(81205);
  const pinePositions=[[],[],[]],maples=[],trees=[];
@@ -172,6 +208,33 @@ export function plantForest(scene,world,maps,maple){
    const k=maples.length<11&&rng()<.13?'maple':'pine';
    place(x,z,sample(rng,.52,1.34),k,Math.abs(x)<32&&Math.abs(z)<36);
  }
+ const extra=random(643861),edge=[];
+ const canAdd=(x,z)=>{
+   if((x>court.left-1.7&&x<court.right+1.7&&z>court.north-1.4&&z<court.south+1.2)||
+     (z>18&&x>-8.8&&x<7.5)||(x>court.right&&x<river(z)&&Math.abs(z-8.15)<2.2)||
+     Math.abs(x-river(z))<6.8)return false;
+   return !trees.some(([a,b])=>(a-x)**2+(b-z)**2<4.65);
+ };
+ for(let z=-66;z<=58;z+=3.1)for(let x=-63;x<=63;x+=3.1){
+   const xx=x+sample(extra,-1.17,1.17),zz=z+sample(extra,-1.17,1.17);
+   const cover=.70+.20*Math.sin(xx*.16+zz*.19)*Math.cos(zz*.12);
+   if(extra()>cover||!canAdd(xx,zz))continue;
+   const scale=sample(extra,.60,1.30);
+   edge.push({x:xx,z:zz,y:terrainAt(xx,zz),scale,angle:extra()*TAU});
+   if(Math.abs(xx)<54&&Math.abs(zz)<52){
+     const w=.49*scale;
+     world.solids.push({x:xx,z:zz,w,d:w});
+   }
+   trees.push([xx,zz]);
+ }
+ const distant=[[],[],[]];
+ for(let z=-148;z<=142;z+=3.45)for(let x=-148;x<=148;x+=3.45){
+   if(Math.abs(x)<64&&z>-66&&z<60)continue;
+   const xx=x+sample(extra,-1.65,1.65),zz=z+sample(extra,-1.65,1.65),y=terrainAt(xx,zz);
+   const cover=.70+.19*Math.sin(xx*.10+zz*.10)+.09*Math.sin(zz*.28-xx*.19);
+   if(Math.hypot(xx,zz)>165||extra()>cover||Math.abs(xx-river(zz))<5.7)continue;
+   distant[Math.floor(extra()*3)].push({x:xx,y,z:zz,scale:sample(extra,.51,1.36),angle:extra()*TAU});
+ }
  const bark=new T.MeshStandardMaterial({map:maps.bark,bumpMap:maps.bark,bumpScale:.067,roughness:.90,color:'#c7ac90'});
  const needles=new T.MeshStandardMaterial({map:maps.needles,alphaTest:.37,vertexColors:true,side:T.DoubleSide,roughness:.88,color:'#c5d69a'});
  for(let i=0;i<3;i++){
@@ -179,8 +242,13 @@ export function plantForest(scene,world,maps,maple){
    batchInstances(scene,model.bark,bark,pinePositions[i]);
    batchInstances(scene,model.needles,needles,pinePositions[i]);
  }
+ const newTrees=woodlandPine(68022);
+ batchInstances(scene,newTrees.trunk,bark,edge);
+ batchInstances(scene,newTrees.crown,needles,edge);
  batchMaple(scene,maple,maples);
- return {pines:pinePositions.reduce((s,a)=>s+a.length,0),maples:maples.length};
+ const canopy=new T.MeshStandardMaterial({vertexColors:true,roughness:1});
+ for(let i=0;i<distant.length;i++)instance(scene,distantPine(23041+31*i),canopy,distant[i],false);
+ return {pines:pinePositions.reduce((s,a)=>s+a.length,edge.length)+distant.reduce((n,a)=>n+a.length,0),maples:maples.length};
 }
 
 function coloredSurface(segmentsU,segmentsV,pointAt){
@@ -311,8 +379,8 @@ export function addWater(scene,maps,lightDirection){
  const waters=[];
  const lakeShape=new T.CircleGeometry(1,88).scale(pond.rx,pond.rz,1);
  const entries=[
-   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.71,color:'#2e5c43',width:384,height:256,scale:1.5,rate:.46,near:23},
-   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.78,color:'#4b7f69',width:384,height:208,scale:1.02,rate:.78,near:35}
+   {shape:lakeShape,x:pond.x,y:pond.y,z:pond.z,alpha:.52,color:'#2e5c43',width:384,height:256,scale:1.5,rate:.46,near:23},
+   {shape:riverPlane(),x:0,y:riverY,z:0,alpha:.66,color:'#4b7f69',width:384,height:208,scale:1.02,rate:.78,near:35}
  ];
  for(const data of entries){
    const water=new Water(data.shape,{textureWidth:data.width,textureHeight:data.height,clipBias:.0018,
@@ -325,6 +393,7 @@ export function addWater(scene,maps,lightDirection){
    water.receiveShadow=true;
    water.renderOrder=2;
    water.userData.distance=data.near;
+   water.userData.dayColor=water.material.uniforms.waterColor.value.clone();
    scene.add(water);
    waters.push(water);
    const mirror=water.onBeforeRender;

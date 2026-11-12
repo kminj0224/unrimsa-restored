@@ -371,6 +371,40 @@ export function buildWorld(scene,maps,models={}){
      box(x,y+.22,sh,8.28,.91,2.63,red);
      box(x,y+1.13,sh,8.53,.16,2.83,tan);
      statueBase.set(x,y+pedestal,sh);
+     if(maps.tanghwa){
+       const artZ=z-d/2+.41,artY=y+3.60,artW=5.65,artH=4.61;
+       const hanging=new T.Mesh(new T.PlaneGeometry(artW,artH),new T.MeshStandardMaterial({
+         map:maps.tanghwa,roughness:.88,bumpMap:maps.paper,bumpScale:.008
+       }));
+       hanging.name='Yeongsan Hoesangdo';
+       hanging.position.set(x,artY,artZ);hanging.receiveShadow=true;scene.add(hanging);
+       box(x,artY-artH/2-.18,artZ-.039,artW+.42,artH+.34,.094,red);
+       for(const bar of [-1,1]){
+         pipe([x-artW/2-.25,artY+bar*(artH/2+.057),artZ+.036],
+           [x+artW/2+.25,artY+bar*(artH/2+.057),artZ+.036],.067,.067,dark,undefined,16);
+       }
+       for(const sign of [-1,1]){
+         box(x+sign*(artW/2+.13),artY-artH/2-.086,artZ+.015,.16,artH+.172,.037,tan);
+         sweep([[x+sign*artW*.39,artY+artH/2+.058,artZ+.04],[x+sign*artW*.21,artY+artH/2+.28,artZ-.03],
+           [x,artY+artH/2+.36,artZ-.06]],.022,dark);
+       }
+     }
+     for(const side of [-1,1]){
+       const pos=x+side*3.72;
+       for(let tier=0;tier<3;tier++){
+         const w=.45+tier*.23;
+         box(pos,y+5.62+tier*.135,sh,.32+tier*.34,.13,w,tier===1?red:teal);
+         box(pos,y+5.67+tier*.135,sh+.5,w,.09,.18,tan);
+       }
+       round(x+side*2.12,y+pedestal,sh+.67,[[.09,0],[.132,.038],[.094,.10],[.135,.17],[.18,.27],[.155,.30],[.095,.21]],ceramic,undefined,34);
+     }
+     box(x,y+6.02,sh,8.14,.20,.48,dark);
+     box(x,y+5.95,sh+.035,8.16,.087,.63,red);
+     for(let i=-9;i<=9;i++){
+       const px=x+i*.40;
+       box(px,y+5.991,sh+.356,.20,.076,.027,teal);
+       box(px,y+6.065,sh+.289,.21,.024,.048,tan);
+     }
      for(let i=-6;i<=6;i++){
        const xx=x+i*.60;
        box(xx,y+.38,sh+1.323,.50,.55,.035,tan);
@@ -402,10 +436,18 @@ export function buildWorld(scene,maps,models={}){
    }else if(id==='west'){
      const sz=z-.64;
      box(x,y,sz,1.32,.40,.79,dark);box(x,y+.40,sz,1.51,.11,.93,wood);
-     for(const side of [-1,1]){
-       box(x+side*.204,y+.54,sz,.40,.028,.52,paper,.026*side);
-       for(let j=0;j<8;j++)box(x+side*.204,y+.569,sz+(j-3.5)*.051,.275,.003,.007,dark);
+     const cover=new T.MeshStandardMaterial({color:'#252d3e',roughness:.87,map:maps.paper});
+     box(x,y+.512,sz,.94,.034,.57,cover);
+     for(let leaf=0;leaf<7;leaf++)box(x,y+.548+leaf*.0028,sz,.901,.0022,.531,leaf%3===0?tan:paper);
+     if(maps.sutra1){
+       const page=new T.Mesh(new T.PlaneGeometry(.884,.514),new T.MeshStandardMaterial({
+         map:maps.sutra1,bumpMap:maps.paper,bumpScale:.003,roughness:.89
+       }));
+       page.name='Lotus Sutra facsimile';
+       page.rotation.x=-Math.PI/2;page.position.set(x,y+.570,sz);
+       page.receiveShadow=true;scene.add(page);
      }
+     for(const dx of [-.295,-.147,0,.147,.295])box(x+dx,y+.569,sz,.002,.002,.516,cover);
      solid(x,sz,1.51,.93);
      use('read','필사본 펼쳐 보기',x,y+.60,sz,1.85,id);
      for(const sign of [-1,1]){
