@@ -562,7 +562,7 @@ async function boot(){
  hallLights=scene.children.filter(object=>object.userData.hallOnly);
  for(const light of hallLights){light.userData.dayIntensity=light.intensity;light.visible=false;}
  lanternCycle=nightLanterns(scene,world.eaveLamps,world.lanternPaper);
- const forest=plantForest(scene,world,maps,maple.scene);
+ plantForest(scene,world,maps,maple.scene);
  water=addWater(scene,maps,direction);
  wake=waterWake(scene);
  smoke=createSmoke();
@@ -571,7 +571,7 @@ async function boot(){
  fish=aquaticLife(scene,maps.carpScales);
  stream=streamLife(scene,models);
  monk=addMonk(scene,models['monk-rig'],maps,walk.floorAt,world.mallet,walk.holdDoor);
- lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,hallLights,forest.lighting);
+ lightCycle=templeLighting(scene,renderer,sun,ambientLight,skyDome,water.waters,hallLights);
  lightCycle(Date.now());
  try{$('guide').hidden=localStorage.getItem('unrimsa-seen')==='1';}catch{$('guide').hidden=false;}
  $('loading').hidden=true;

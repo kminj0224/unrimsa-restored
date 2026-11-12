@@ -56,7 +56,7 @@ function lightAt(hour){
  return {daylight,sun,ambient,environment,exposure,lamps,birds};
 }
 
-export function templeLighting(scene,renderer,sun,ambient,sky,waters,hallLights,forestLighting){
+export function templeLighting(scene,renderer,sun,ambient,sky,waters,hallLights){
  const direction=new T.Vector3(),lit=new T.Color(),fog=new T.Color();
  const dayFog=new T.Color('#a5aca6'),nightFog=new T.Color('#121b25'),duskFog=new T.Color('#81766b');
  const daySun=new T.Color('#fff1de'),warmSun=new T.Color('#e9b58d'),moon=new T.Color('#9caec6');
@@ -70,7 +70,6 @@ export function templeLighting(scene,renderer,sun,ambient,sky,waters,hallLights,
    direction.set(east,Math.max(.045,up),-north).normalize();
    sun.position.copy(direction).multiplyScalar(46);
    sun.intensity=state.sun;
-   forestLighting(daylight);
    sun.color.copy(lit.copy(moon).lerp(daySun,daylight).lerp(warmSun,twilight*.61));
    ambient.intensity=state.ambient;
    ambient.color.copy(nightSky).lerp(daySky,daylight);
